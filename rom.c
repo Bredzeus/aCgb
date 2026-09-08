@@ -19,24 +19,23 @@
 #define ROM_END_HEADER (ROM_OFFSET_GLOBAL_CHKSUM + ROM_GLOBAL_CHKSUM_SIZE)
 
 static bool rom_info_init(rom_info_t* rom_info);
-static uint8_t rom_load_(size_t pos);
-static void rom_store_(size_t pos, uint8_t val);
 static mbc_type_t rom_map_type_to_mbc(uint32_t rom_type);
 
 #ifdef GB_HOST_HAS_FILESYSTEM
 #include <stdio.h>
-static bool rom_save_byte_to_file(size_t pos, uint8_t val);
+static bool rom_save_ram_byte(size_t pos, uint8_t val);
 static bool rom_init_ram(void);
 static bool rom_generate_ram_filepath(void);
 static char* rom_filepath = NULL;
 static char* ram_filepath = NULL;
 #endif /* GB_HOST_HAS_FILESYSTEM */
 
-static uint8_t* rom_data = NULL;
-static size_t rom_data_size = 0; // in bytes
 static bool rom_ready = false;
 static rom_info_t rom_info;
+static uint8_t* rom_data = NULL;
+static size_t rom_data_size = 0; // in bytes
 static uint8_t* ram_data = NULL;
+static size_t ram_data_size = 0; // in bytes
 
 bool rom_info_init(rom_info_t* rom_info) {
   if (!rom_ready){
@@ -58,21 +57,6 @@ bool rom_info_init(rom_info_t* rom_info) {
   return true;
 }
 
-uint8_t rom_load_(size_t pos) {
-  if (!rom_ready || pos > rom_data_size) {
-    return 0;
-  }
-  return rom_data[pos];
-}
-
-bool rom_store_(size_t pos, uint8_t val) {
-  if (!rom_ready || pos > rom_data_size) {
-    return false;
-  }
-  rom_data[pos] = val;
-  return rom_save_byte_to_file(pos, val);
-}
-
 void rom_cleanup(void) {
   if (rom_data != NULL) {
     free(rom_data);
@@ -87,6 +71,7 @@ void rom_cleanup(void) {
     free(rom_filepath);
     rom_filepath = NULL;
   }
+  ram_data_size = 0;
   if (ram_filepath != NULL) {
     free(ram_filepath);
     ram_filepath = NULL;
@@ -95,12 +80,26 @@ void rom_cleanup(void) {
   memset(rom_info, 0, sizeof(rom_info_t));
 }
 
-uint8_t rom_load(uint16_t addr) {
-  return mbc_load(addr);
+uint8_t rom_load(size_t addr) {
+  if (!rom_ready || addr > rom_data_size) {
+    return 0;
+  }
+  return rom_data[addr];
 }
 
-void rom_store(uint16_t addr, uint8_t val) {
-  mbc_store(addr, val);
+uint8_t ram_load(size_t addr) {
+  if (!rom_ready || addr > ram_data_size) {
+    return 0;
+  }
+  return ram_data[addr];
+}
+
+void ram_store(size_t addr, uint8_t val) {
+  if (!rom_ready || addr > ram_data_size) {
+    return false;
+  }
+  ram_data[addr] = val;
+  return rom_save_ram_byte(addr, val);
 }
 
 void rom_get_info(rom_info_t* info) {
@@ -166,8 +165,8 @@ mbc_type_t rom_map_type_to_mbc(uint32_t rom_type) {
 }
 
 #ifdef GB_HOST_HAS_FILESYSTEM
-bool rom_save_byte_to_file(size_t pos, uint8_t val) {
-  if (!rom_ready || pos > rom_data_size) {
+bool rom_save_ram_byte(size_t pos, uint8_t val) {
+  if (!rom_ready || pos > ram_data_size) {
     return false;
   }
   FILE* file;
@@ -211,31 +210,42 @@ bool rom_load_from_file(char* filepath) {
 
 bool rom_init_ram(void) {
   bool init_ok = true;
-  size_t ram_size_bytes = 0;
+  size_t ram_data_size = 0;
   switch (rom_info.ram_size) {
     case ROM_RAM_SIZE_8KB:
-      ram_size_bytes = 8192;
+      ram_data_size = 8192;
       break;
     case ROM_RAM_SIZE_32KB:
-      ram_size_bytes = 32768;
+      ram_data_size = 32768;
       break;
     case ROM_RAM_SIZE_128KB:
-      ram_size_bytes = 131072;
+      ram_data_size = 131072;
       break;
     case ROM_RAM_SIZE_64KB:
-      ram_size_bytes = 65536;
+      ram_data_size = 65536;
       break;
     case ROM_RAM_SIZE_NONE:
     case ROM_RAM_SIZE_INV:
     default:
       break;
   }
-  if (ram_size_bytes != 0) {
-    ram_data = (uint8_t*)calloc(ram_size_bytes, sizeof(uint8_t));
+  if (ram_data_size != 0) {
+    ram_data = (uint8_t*)calloc(ram_data_size, sizeof(uint8_t));
     if (ram_data == NULL) {
       init_ok = false;
     }
     init_ok &= rom_generate_ram_filepath();
+    FILE* file;
+    file = fopen(ram_filepath, "rb");
+    if (file == NULL) {
+      file = fopen(ram_filepath, "wb");
+      if (file == NULL) {
+        init_ok = false;
+      } else {
+        fwrite(ram_data, sizeof(uint8_t), ram_data_size, file);
+      }
+    }
+    fclose(file);
   }
   return init_ok;
 }

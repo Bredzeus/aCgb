@@ -95,12 +95,16 @@ void rom_cleanup(void);
 * loads a byte from rom
 * a rom must have already been loaded
 */
-uint8_t rom_load(uint16_t addr);
+uint8_t rom_load(size_t addr);
 /*
-* Stores a byte into rom
+* Loads a byte from ram
+*/
+uint8_t ram_load(size_t addr);
+/*
+* Stores a byte into ram
 * a rom must have already been loaded
 */
-void rom_store(uint16_t addr, uint8_t val);
+void ram_store(size_t addr, uint8_t val);
 /*
 *  Gets rom info
 */
