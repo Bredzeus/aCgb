@@ -15,6 +15,10 @@
 #define MBC3_RTC_HOURS (0x0AU)
 #define MBC3_RTC_DAY_LOW (0x0BU)
 #define MBC3_RTC_DAY_HIGH (0x0CU)
+#define MBC3_RAM_ENABLE_END (0x1FFFU)
+#define MBC3_ROM_BANK_NUM_END (0x3FFFU)
+#define MBC3_RAM_BANK_NUM_END (0x5FFFU)
+#define MBC3_CLOCK_LATCH_END (0x7FFFU)
 
 // Static function defs
 static void mbc_init_none(void);
@@ -66,14 +70,15 @@ static uint8_t mbc_load_other(uint16_t addr);
 static void mbc_store_other(uint16_t addr, uint8_t val);
 
 static rom_load_f_t rom_load_cb = NULL;
-static rom_store_f_t rom_store_cb = NULL;
+static rom_store_f_t ram_store_cb = NULL;
+static rom_load_f_t ram_load_cb = NULL;
 static mem_load_f_t mbc_load_ = NULL;
 static mem_store_f_t mbc_store_ = NULL;
 static mbc_type_t mbc_type = MBC_TYPE_NONE;
 static mbc_t mbc;
 
 // API func impl
-void mbc_init(mbc_type_t type, rom_load_f_t rom_load, rom_store_f_t rom_store) {
+void mbc_init(mbc_type_t type, rom_load_f_t rom_load, rom_store_f_t ram_store, rom_load_f_t ram_load) {
   switch (type) {
     case MBC_TYPE_NONE:
       mbc_init_none();
@@ -115,7 +120,8 @@ void mbc_init(mbc_type_t type, rom_load_f_t rom_load, rom_store_f_t rom_store) {
   }
   mbc_type = type;
   rom_load_cb = rom_load;
-  rom_store_cb = rom_store;
+  ram_store_cb = ram_store;
+  ram_load_cb = ram_load;
 }
 
 uint8_t mbc_load(uint16_t addr) {
@@ -137,11 +143,17 @@ void mbc_init_none(void) {
 }
 
 uint8_t mbc_load_none(uint16_t addr) {
-  return rom_load((size_t)addr);
+  uint8_t val = 0;
+  if (addr <= ADDR_ROM1_END) {
+    val = rom_load((size_t)addr);
+  }
+  return val;
 }
 
+// No ram to store
 void mbc_store_none(uint16_t addr, uint8_t val) {
-  rom_store((size_t)addr, val)
+  (void)addr;
+  (void)val;
 }
 
 /*
@@ -159,11 +171,13 @@ void mbc_init_mbc1(void) {
 
 uint8_t mbc_load_mbc1(uint16_t addr) {
   size_t rom_addr = 0;
+  uint8_t val = 0;
   if (addr <= ADDR_ROM0_END) {
     rom_addr = addr & 0x3FU;
     if (mbc.mbc1.ram_en && mbc.mbc1.bank_mode) {
       rom_addr |= (mbc.mbc1.ram_bank << 19);
     }
+    val = rom_load_cb(rom_addr);
   }else if (addr <= ADDR_ROM1_END) {
     uint8_t rom_bank = mbc.mbc1.rom_bank;
     // Rom bank 0 maps to 1
@@ -171,18 +185,20 @@ uint8_t mbc_load_mbc1(uint16_t addr) {
       rom_bank = 1;
     }
     rom_addr = (addr & 0x3FFFU) | (rom_bank << 14) | (mbc.mbc1.ram_bank << 19);
-  }else {
+    val = rom_load_cb(rom_addr);
+  }else if (addr >= ADDR_EXRAM_START && addr <= ADDR_EXRAM_END) {
     if (mbc.mbc1.ram_en) {
       if (mbc.mcb1.bank_mode) {
         rom_addr = addr & 0x3FFF;
       }else {
         rom_addr = (addr & 0x3FFF) | ((ram_bank & 0x02) << 13);
       }
+      val = ram_load_cb(rom_addr);
     }else {
-      return 0xFF;
+      val = 0xFF;
     }
   }
-  return rom_load_cb(rom_addr);
+  return val;
 }
 
 void mbc_store_mbc1(uint16_t addr, uint8_t val) {
@@ -209,13 +225,12 @@ void mbc_store_mbc1(uint16_t addr, uint8_t val) {
     }else {
       rom_addr = (addr & 0x3F) | ((ram_bank & 0x02) << 13);
     }
-    rom_store_cb(rom_addr, val);
+    ram_store_cb(rom_addr, val);
   }
 }
 
 /*
 * MBC2
-* TODO: internal ram should still be in rom file here i think
 */
 void mbc_init_mbc2(void) {
   mbc_load_ = mbc_load_mbc2;
@@ -227,10 +242,9 @@ void mbc_init_mbc2(void) {
 uint8_t mbc_load_mbc2(uint16_t addr) {
   size_t rom_addr = 0;
   uint8_t val = 0;
-  bool need_load = false;
   if (addr <= ADDR_ROM0_END) {
     rom_addr = addr;
-    need_load = true;
+    val = rom_load_cb(rom_addr);
   } else if (addr <= ADDR_ROM1_END) {
     uint8_t rom_bank = mbc.mbc2.rom_bank;
     // Rom bank 0 maps to 1
@@ -238,14 +252,11 @@ uint8_t mbc_load_mbc2(uint16_t addr) {
       rom_bank = 1;
     }
     rom_addr = (addr & 0x3FU) | (rom_bank << 14);
-    need_load = true;
-  } else if (addr <= ADDR_EXRAM_END && mbc.mbc2.ram_en) {
+    val = rom_load_cb(rom_addr);
+  } else if (addr >= ADDR_EXRAM_START && addr <= ADDR_EXRAM_END && mbc.mbc2.ram_en) {
     // mbc2 has 512 (half-bytes) of ram that are mirrored through external ram space
     uint16_t addr_ram = (addr - ADDR_EXRAM_START) % MBC2_RAM_SIZE;
-    val = mbc.mbc2.internal_ram[addr_ram];
-  }
-  if (need_load) {
-    val = rom_load_cb(rom_addr);
+    val = ram_load_cb(addr_ram);
   }
   return val;
 }
@@ -259,7 +270,7 @@ void mbc_store_mbc2(uint16_t addr, uint8_t val) {
     }
   } else if (addr >= ADDR_EXRAM_START && addr <= ADDR_EXRAM_END && mbc.mbc2.ram_en) {
     uint16_t addr_ram = (addr - ADDR_EXRAM_START) % MBC2_RAM_SIZE;
-    mbc.mbc2.internal_ram[addr_ram] = val;
+    ram_store_cb(addr_ram, val);
   }
 }
 
@@ -279,29 +290,20 @@ void mbc_init_mbc3(void) {
 uint8_t mbc_load_mbc3(uint16_t addr) {
   size_t rom_addr = 0;
   uint8_t val = 0;
-  bool need_load = false;
   if (addr <= ADDR_ROM0_END) {
-    rom_addr = addr & 0x3FU;
-    if (mbc.mbc3.ram_timer_en) { // ?
-      rom_addr |= (mbc.mbc3.ram_bank << 19);
-    }
-    need_load = true;
+    val = rom_load_cb((size_t)addr);
   } else if (addr <= ADDR_ROM1_END) {
     uint8_t rom_bank = mbc.mbc3.rom_bank;
     // Rom bank 0 maps to 1
     if (rom_bank == 0) {
       rom_bank = 1;
     }
-    rom_addr = (addr & 0x3FU) | (rom_bank << 14) | (mbc.mbc3.ram_bank << 19);
-    need_load = true;
+    rom_addr = (addr & 0x3FU) | (rom_bank << 14);
+    val = rom_load_cb(rom_addr);
   } else if (mbc.mbc3.ram_timer_en){
-    if (addr < 0x8U) {
-      // TODO: check this
-      if (rom_bank == 0) {
-        rom_bank = 1;
-      }
-      rom_addr = (addr & 0x3FU) | (rom_bank << 14) | (mbc.mbc3.ram_bank << 19);
-      need_load = true;
+    if (mbc.mbc3.ram_bank < 0x8U) {
+      rom_addr = (size_t)(addr - ADDR_EXRAM_START) | ((size_t)mbc.mbc3.ram_bank << 16);
+      val = ram_load_cb(rom_addr);
     } else {
       // TODO: update rtc if not latched
       switch (mbc.mbc3.ram_bank) {
@@ -325,14 +327,29 @@ uint8_t mbc_load_mbc3(uint16_t addr) {
       }
     }
   }
-  if (need_load) {
-    val = rom_load_cb(rom_addr);
-  }
   return val;
 }
 
 void mbc_store_mbc3(uint16_t addr, uint8_t val) {
-
+  if (addr <= MBC3_RAM_ENABLE_END) {
+    mbc.mbc3.ram_timer_en = (val == 0x0A);
+  } else if (addr <= MBC3_ROM_BANK_NUM_END) {
+    mbc.mbc3.rom_bank = val;
+  } else if (addr <= MBC3_RAM_BANK_NUM_END) {
+    mbc.mbc3.ram_bank = val;
+  } else if (addr <= MBC3_CLOCK_LATCH_END) {
+    if (!mbc.mbc3.latch_rtc && (val == 0x01)) {
+      // Todo: latch rtc
+    }
+    mbc.mbc3.latch_rtc = val;
+  } else if (mbc.mbc3.ram_timer_en) {
+    if (mbc.mbc3.ram_bank < 0x8U) {
+      size_t ram_addr = (size_t)(addr - ADDR_EXRAM_START) | ((size_t)mbc.mbc3.ram_bank << 16)
+      ram_store_cb(ram_addr, val);
+    } else {
+      // Todo: rtc
+    }
+  }
 }
 
 

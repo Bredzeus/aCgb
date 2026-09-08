@@ -26,6 +26,9 @@ static mbc_type_t rom_map_type_to_mbc(uint32_t rom_type);
 static bool rom_save_ram_byte(size_t pos, uint8_t val);
 static bool rom_init_ram(void);
 static bool rom_generate_ram_filepath(void);
+static uint8_t rom_load_(size_t addr);
+static uint8_t ram_load_(size_t addr);
+static void ram_store_(size_t addr, uint8_t val);
 static char* rom_filepath = NULL;
 static char* ram_filepath = NULL;
 #endif /* GB_HOST_HAS_FILESYSTEM */
@@ -80,21 +83,29 @@ void rom_cleanup(void) {
   memset(rom_info, 0, sizeof(rom_info_t));
 }
 
-uint8_t rom_load(size_t addr) {
+uint8_t rom_load(uint16_t addr) {
+  return mbc_load(addr);
+}
+
+void rom_store(uint16_t addr, uint8_t val) {
+  mbc_store(addr, val);
+}
+
+uint8_t rom_load_(size_t addr) {
   if (!rom_ready || addr > rom_data_size) {
     return 0;
   }
   return rom_data[addr];
 }
 
-uint8_t ram_load(size_t addr) {
+uint8_t ram_load_(size_t addr) {
   if (!rom_ready || addr > ram_data_size) {
     return 0;
   }
   return ram_data[addr];
 }
 
-void ram_store(size_t addr, uint8_t val) {
+void ram_store_(size_t addr, uint8_t val) {
   if (!rom_ready || addr > ram_data_size) {
     return false;
   }
@@ -203,7 +214,7 @@ bool rom_load_from_file(char* filepath) {
   memcpy(rom_filepath, filepath, filepath_len);
   rom_info_init(&rom_info);
   mbc_type_t mbc_type = rom_map_type_to_mbc(rom_info.cart_type);
-  mbc_init(mbc_type, rom_load_, rom_store_);
+  mbc_init(mbc_type, rom_load_, rom_store_, ram_store_);
   rom_ready &= rom_init_ram();
   return rom_ready;
 }
@@ -228,6 +239,10 @@ bool rom_init_ram(void) {
     case ROM_RAM_SIZE_INV:
     default:
       break;
+  }
+  mbc_type_t mbc_type = rom_map_type_to_mbc(rom_info.cart_type);
+  if (mbc_type == MBC_TYPE_MBC2) {
+    ram_data_size = MBC_MBC2_RAM_SIZE;
   }
   if (ram_data_size != 0) {
     ram_data = (uint8_t*)calloc(ram_data_size, sizeof(uint8_t));

@@ -30,7 +30,6 @@ typedef struct mbc1_s {
 
 #define MBC_MBC2_RAM_SIZE (512U)
 typedef struct mbc2_s {
-  uint8_t internal_ram[MBC_MBC2_RAM_SIZE];
   bool ram_en;
   uint8_t rom_bank;
 } mbc2_t;
@@ -82,7 +81,7 @@ typedef union mbc_s {
   mbc7_t mbc6;
 } mbc_t;
 
-void mbc_init(mbc_type_t type, rom_load_f_t rom_load, rom_store_f_t rom_store);
+void mbc_init(mbc_type_t type, rom_load_f_t rom_load, rom_store_f_t ram_store, rom_load_f_t ram_load);
 uint8_t mbc_load(uint16_t addr);
 void mbc_store(uint16_t addr, uint8_t val);
 
