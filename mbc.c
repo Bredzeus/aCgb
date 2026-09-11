@@ -1,5 +1,6 @@
 #include "mbc.h"
 #include "mem_map.h"
+#include "common.h"
 
 #define MBC1_RAM_ENABLE_END (0x1FFFU)
 #define MBC1_ROM_BANK_NUM_END (0x3FFFU)
@@ -19,6 +20,11 @@
 #define MBC3_ROM_BANK_NUM_END (0x3FFFU)
 #define MBC3_RAM_BANK_NUM_END (0x5FFFU)
 #define MBC3_CLOCK_LATCH_END (0x7FFFU)
+
+#define MBC5_RAM_ENABLE_END (0x1FFFU)
+#define MBC5_ROM_BANK_LOW_END (0x2FFFU)
+#define MBC5_ROM_BANK_HIGH_END (0x3FFFU)
+#define MBC5_RAM_BANK_END (0x5FFFU)
 
 // Static function defs
 static void mbc_init_none(void);
@@ -186,7 +192,7 @@ uint8_t mbc_load_mbc1(uint16_t addr) {
     }
     rom_addr = (addr & 0x3FFFU) | (rom_bank << 14) | (mbc.mbc1.ram_bank << 19);
     val = rom_load_cb(rom_addr);
-  }else if (addr >= ADDR_EXRAM_START && addr <= ADDR_EXRAM_END) {
+  }else if (check_range_inc(addr, ADDR_EXRAM_START, ADDR_EXRAM_END)) {
     if (mbc.mbc1.ram_en) {
       if (mbc.mcb1.bank_mode) {
         rom_addr = addr & 0x3FFF;
@@ -215,7 +221,7 @@ void mbc_store_mbc1(uint16_t addr, uint8_t val) {
     mbc.mbc1.ram_bank = val;
   }else if (addr <= MBC1_BANK_MODE_END) {
     mbc.mbc1.bank_mode = (bool)val;
-  }else {
+  }else if (check_range_inc(addr, ADDR_EXRAM_START, ADDR_EXRAM_END)) {
     write_ram = mbc.mbc1.ram_en;
   }
   if (write_ram) {
@@ -253,7 +259,7 @@ uint8_t mbc_load_mbc2(uint16_t addr) {
     }
     rom_addr = (addr & 0x3FU) | (rom_bank << 14);
     val = rom_load_cb(rom_addr);
-  } else if (addr >= ADDR_EXRAM_START && addr <= ADDR_EXRAM_END && mbc.mbc2.ram_en) {
+  } else if (check_range_inc(addr, ADDR_EXRAM_START, ADDR_EXRAM_END) && mbc.mbc2.ram_en) {
     // mbc2 has 512 (half-bytes) of ram that are mirrored through external ram space
     uint16_t addr_ram = (addr - ADDR_EXRAM_START) % MBC2_RAM_SIZE;
     val = ram_load_cb(addr_ram);
@@ -268,7 +274,7 @@ void mbc_store_mbc2(uint16_t addr, uint8_t val) {
     } else {
       mbc.mbc2.ram_en = ((val & 0xA) == 0xA);
     }
-  } else if (addr >= ADDR_EXRAM_START && addr <= ADDR_EXRAM_END && mbc.mbc2.ram_en) {
+  } else if (check_range_inc(addr, ADDR_EXRAM_START, ADDR_EXRAM_END) && mbc.mbc2.ram_en) {
     uint16_t addr_ram = (addr - ADDR_EXRAM_START) % MBC2_RAM_SIZE;
     ram_store_cb(addr_ram, val);
   }
@@ -300,12 +306,11 @@ uint8_t mbc_load_mbc3(uint16_t addr) {
     }
     rom_addr = (addr & 0x3FU) | (rom_bank << 14);
     val = rom_load_cb(rom_addr);
-  } else if (mbc.mbc3.ram_timer_en){
+  } else if (check_range_inc(addr, ADDR_EXRAM_START, ADDR_EXRAM_END) && mbc.mbc3.ram_timer_en){
     if (mbc.mbc3.ram_bank < 0x8U) {
       rom_addr = (size_t)(addr - ADDR_EXRAM_START) | ((size_t)mbc.mbc3.ram_bank << 16);
       val = ram_load_cb(rom_addr);
     } else {
-      // TODO: update rtc if not latched
       switch (mbc.mbc3.ram_bank) {
         case MBC3_RTC_SECONDS:
           val = mbc.mbc3.rtc.seconds;
@@ -338,20 +343,34 @@ void mbc_store_mbc3(uint16_t addr, uint8_t val) {
   } else if (addr <= MBC3_RAM_BANK_NUM_END) {
     mbc.mbc3.ram_bank = val;
   } else if (addr <= MBC3_CLOCK_LATCH_END) {
-    if (!mbc.mbc3.latch_rtc && (val == 0x01)) {
-      // Todo: latch rtc
-    }
     mbc.mbc3.latch_rtc = val;
-  } else if (mbc.mbc3.ram_timer_en) {
+  } else if (check_range_inc(addr, ADDR_EXRAM_START, ADDR_EXRAM_END) && mbc.mbc3.ram_timer_en) {
     if (mbc.mbc3.ram_bank < 0x8U) {
       size_t ram_addr = (size_t)(addr - ADDR_EXRAM_START) | ((size_t)mbc.mbc3.ram_bank << 16)
       ram_store_cb(ram_addr, val);
     } else {
-      // Todo: rtc
+      switch (mbc.mbc3.ram_bank) {
+        case MBC3_RTC_SECONDS:
+          mbc.mbc3.rtc.seconds = val;
+          break;
+        case MBC3_RTC_MINUTES:
+          mbc.mbc3.rtc.minutes = val;
+          break;
+        case MBC3_RTC_HOURS:
+          mbc.mbc3.rtc.hours = val;
+          break;
+        case MBC3_RTC_DAY_LOW:
+          mbc.mbc3.rtc.day_low = val;
+          break;
+        case MBC3_RTC_DAY_HIGH:
+          mbc.mbc3.rtc.day_high = val;
+          break;
+        default:
+          break;
+      }
     }
   }
 }
-
 
 void mbc_init_mbc5(void) {
   mbc_load_ = mbc_load_mbc5;
@@ -362,14 +381,38 @@ void mbc_init_mbc5(void) {
 }
 
 uint8_t mbc_load_mbc5(uint16_t addr) {
-  (void)addr;
-  return 0;
-}
-void mbc_store_mbc5(uint16_t addr, uint8_t val) {
-  (void)addr;
-  (void)val;
+  size_t rom_addr = 0;
+  uint8_t val = 0;
+  if (addr <= ADDR_ROM0_END) {
+    val = rom_load_cb((size_t)addr);
+  } else if (addr <= ADDR_ROM1_END) {
+    rom_addr = (addr & 0x3FU) | (mbc.mbc5.rom_bank << 14);
+    val = rom_load_cb(rom_addr);
+  } else if (check_range_inc(addr, ADDR_EXRAM_START, ADDR_EXRAM_END) && mbc.mbc5.ram_en) {
+    rom_addr = (size_t)(addr - ADDR_EXRAM_START) | ((size_t)mbc.mbc5.ram_bank << 16);
+    val = ram_load_cb(rom_addr); 
+  }
+  return val;
 }
 
+void mbc_store_mbc5(uint16_t addr, uint8_t val) {
+  if (addr <= MBC5_RAM_ENABLE_END) {
+    mbc.mbc5.ram_en = ((val & 0x0A) == 0x0A);
+  } else if (addr <= MBC5_ROM_BANK_LOW_END) {
+    mbc.mbc5.rom_bank &= 0xFF00U;
+    mbc.mbc5.rom_bank |= (uint16_t)val;
+  } else if (addr <= MBC5_ROM_BANK_HIGH_END) {
+    mbc.mbc5.rom_bank &= 0x00FFU;
+    mbc.mbc5.rom_bank |= ((uint16_t)val << 8);
+  } else if (addr <= MBC5_RAM_BANK_END) {
+    mbc.mbc5.ram_bank = val;
+  } else if (check_range_inc(addr, ADDR_EXRAM_START, ADDR_EXRAM_END) && mbc.mbc5.ram_en) {
+    size_t ram_addr = (size_t)(addr - ADDR_EXRAM_START) | ((size_t)mbc.mbc5.ram_bank << 16);
+    ram_store_cb(ram_addr, val);
+  }
+}
+
+// mbc6 only used in 1 game, not dealing with it rn
 void mbc_init_mbc6(void) {
   mbc_load_ = mbc_load_mbc6;
   mbc_store_ = mbc_store_mbc6;

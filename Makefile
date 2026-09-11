@@ -8,11 +8,15 @@ C_FLAGS=-std=c11
 C_FLAGS+=-Werror
 C_FLAGS+=-Wall
 
+
 C_FILES=main.c
+
+C_FILES+=sstring.c
+
 C_FILES+=gb.c
 C_FILES+=mem.c
-#C_FILES+=mbc.c
-#C_FILES+=rom.c
+C_FILES+=mbc.c
+C_FILES+=rom.c
 C_FILES+=sm83/sm83.c
 C_FILES+=sm83/sm83_alu.c
 

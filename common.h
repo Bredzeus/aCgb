@@ -20,10 +20,12 @@ typedef void (*mem_store_f_t)(uint16_t, uint8_t);
 typedef uint8_t (*rom_load_f_t)(size_t);
 typedef void (*rom_store_f_t)(size_t, uint8_t);
 
-typedef struct sstring_s {
-  char* buf;
-  size_t len;
-  size_t size;
-} sstring_t;
+inline bool check_range_inc(unsigned val, unsigned lower, unsigned upper) {
+  return (val >= lower && val <= upper);
+}
+
+inline bool check_range_exc(unsigned val, unsigned lower, unsigned upper) {
+  return (val > lower && val < upper);
+}
 
 #endif 

@@ -45,6 +45,7 @@ uint8_t mem_load(uint16_t addr){
     val = 0;
   }else if(addr <= ADDR_IO_END){
     // TODO: io, split up into its individual components, no point in trying to combine everything
+    val = 0;
   }else if(addr <= ADDR_HRAM_END){
     val = hram[addr - ADDR_HRAM_START];
   }else{
@@ -74,6 +75,7 @@ void mem_store(uint16_t addr, uint8_t val){
     oam[addr - ADDR_OAM_START] = val;
   }else if(addr <= ADDR_NU_END){
     // behavior is version dependent
+    break;
   }else if(addr <= ADDR_IO_END){
     // TODO: io, split up into its individual components, no point in trying to combine everything
   }else if(addr <= ADDR_HRAM_END){

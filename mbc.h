@@ -71,6 +71,7 @@ typedef struct mbc6_s {
 
 // todo other mbcs
 typedef struct mbc7_s {
+  bool todo;
 } mbc7_t;
 
 typedef union mbc_s {
@@ -78,11 +79,13 @@ typedef union mbc_s {
   mbc2_t mbc2;
   mbc3_t mbc3;
   mbc5_t mbc5;
-  mbc7_t mbc6;
+  mbc6_t mbc6;
+  mbc7_t mbc7;
 } mbc_t;
 
 void mbc_init(mbc_type_t type, rom_load_f_t rom_load, rom_store_f_t ram_store, rom_load_f_t ram_load);
 uint8_t mbc_load(uint16_t addr);
 void mbc_store(uint16_t addr, uint8_t val);
+// Todo: add mbc_update to handle mbcs with special functions, i.e. rtc
 
 #endif
