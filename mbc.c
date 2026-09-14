@@ -1,4 +1,5 @@
 #include "mbc.h"
+#include <string.h>
 #include "mem_map.h"
 #include "common.h"
 
@@ -29,7 +30,7 @@
 // Static function defs
 static void mbc_init_none(void);
 static uint8_t mbc_load_none(uint16_t addr);
-static void mbc_load_none(uint16_t addr, uint8_t val);
+static void mbc_store_none(uint16_t addr, uint8_t val);
 
 static void mbc_init_mbc1(void);
 static uint8_t mbc_load_mbc1(uint16_t addr);
@@ -144,14 +145,14 @@ void mbc_store(uint16_t addr, uint8_t val) {
 * 32KiB mapped directly into 0x0000 - 0x7FFF
 */
 void mbc_init_none(void) {
-  mbc_load = mbc_load_none;
-  mbc_store = mbc_store_none;
+  mbc_load_ = mbc_load_none;
+  mbc_store_ = mbc_store_none;
 }
 
 uint8_t mbc_load_none(uint16_t addr) {
   uint8_t val = 0;
   if (addr <= ADDR_ROM1_END) {
-    val = rom_load((size_t)addr);
+    val = rom_load_cb(addr);
   }
   return val;
 }
@@ -194,10 +195,10 @@ uint8_t mbc_load_mbc1(uint16_t addr) {
     val = rom_load_cb(rom_addr);
   }else if (check_range_inc(addr, ADDR_EXRAM_START, ADDR_EXRAM_END)) {
     if (mbc.mbc1.ram_en) {
-      if (mbc.mcb1.bank_mode) {
+      if (mbc.mbc1.bank_mode) {
         rom_addr = addr & 0x3FFF;
       }else {
-        rom_addr = (addr & 0x3FFF) | ((ram_bank & 0x02) << 13);
+        rom_addr = (addr & 0x3FFF) | ((mbc.mbc1.ram_bank & 0x02) << 13);
       }
       val = ram_load_cb(rom_addr);
     }else {
@@ -210,7 +211,7 @@ uint8_t mbc_load_mbc1(uint16_t addr) {
 void mbc_store_mbc1(uint16_t addr, uint8_t val) {
   bool write_ram = false;
   if (addr <= MBC1_RAM_ENABLE_END) {
-    if (val & 0x0F == 0x0A) {
+    if ((val & 0x0F) == 0x0A) {
       mbc.mbc1.ram_en = true;
     }else {
       mbc.mbc1.ram_en = false;
@@ -226,10 +227,10 @@ void mbc_store_mbc1(uint16_t addr, uint8_t val) {
   }
   if (write_ram) {
     size_t rom_addr = 0;
-    if (mbc.mcb1.bank_mode) {
+    if (mbc.mbc1.bank_mode) {
       rom_addr = addr & 0x3F;
     }else {
-      rom_addr = (addr & 0x3F) | ((ram_bank & 0x02) << 13);
+      rom_addr = (addr & 0x3F) | ((mbc.mbc1.ram_bank & 0x02) << 13);
     }
     ram_store_cb(rom_addr, val);
   }
@@ -286,7 +287,7 @@ void mbc_store_mbc2(uint16_t addr, uint8_t val) {
 void mbc_init_mbc3(void) {
   mbc_load_ = mbc_load_mbc3;
   mbc_store_ = mbc_store_mbc3;
-  mbc.mbc3.rtc = 0;
+  memset(&mbc.mbc3.rtc, 0, sizeof(mbc3_rtc_t));
   mbc.mbc3.ram_timer_en = false;
   mbc.mbc3.rom_bank = 1;
   mbc.mbc3.ram_bank = 0;
@@ -322,10 +323,10 @@ uint8_t mbc_load_mbc3(uint16_t addr) {
           val = mbc.mbc3.rtc.hours;
           break;
         case MBC3_RTC_DAY_LOW:
-          val = mbc.mbc3.rtc.day_low;
+          val = mbc.mbc3.rtc.days_low;
           break;
         case MBC3_RTC_DAY_HIGH:
-          val = mbc.mbc3.rtc.day_high;
+          val = mbc.mbc3.rtc.days_high;
           break;
         default:
           break;
@@ -346,7 +347,7 @@ void mbc_store_mbc3(uint16_t addr, uint8_t val) {
     mbc.mbc3.latch_rtc = val;
   } else if (check_range_inc(addr, ADDR_EXRAM_START, ADDR_EXRAM_END) && mbc.mbc3.ram_timer_en) {
     if (mbc.mbc3.ram_bank < 0x8U) {
-      size_t ram_addr = (size_t)(addr - ADDR_EXRAM_START) | ((size_t)mbc.mbc3.ram_bank << 16)
+      size_t ram_addr = (size_t)(addr - ADDR_EXRAM_START) | ((size_t)mbc.mbc3.ram_bank << 16);
       ram_store_cb(ram_addr, val);
     } else {
       switch (mbc.mbc3.ram_bank) {
@@ -360,10 +361,10 @@ void mbc_store_mbc3(uint16_t addr, uint8_t val) {
           mbc.mbc3.rtc.hours = val;
           break;
         case MBC3_RTC_DAY_LOW:
-          mbc.mbc3.rtc.day_low = val;
+          mbc.mbc3.rtc.days_low = val;
           break;
         case MBC3_RTC_DAY_HIGH:
-          mbc.mbc3.rtc.day_high = val;
+          mbc.mbc3.rtc.days_high = val;
           break;
         default:
           break;
@@ -485,7 +486,7 @@ uint8_t mbc_load_huc1(uint16_t addr) {
 
 void mbc_store_huc1(uint16_t addr, uint8_t val) {
   (void)addr;
-  (void)val
+  (void)val;
 }
 
 void mbc_init_huc3(void) {

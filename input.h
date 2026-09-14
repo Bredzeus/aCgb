@@ -2,6 +2,7 @@
 #define INPUT_H_
 
 #include <stdbool.h>
+#include <stdint.h>
 
 typedef enum {
   INPUT_METHOD_KEYBOARD = 0,

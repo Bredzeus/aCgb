@@ -2,6 +2,7 @@
 #define SM83_H_
 
 #include "common.h"
+#include "sstr.h"
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -59,6 +60,6 @@ void sm83_reset(sm83_t* sm83);
 */
 uint32_t sm83_run(sm83_t* sm83);
 
-void sm83_dump(sm83_t* sm83, sstring_t* str);
+void sm83_to_sstr(sm83_t* sm83, sstr_t* sstr);
 
 #endif

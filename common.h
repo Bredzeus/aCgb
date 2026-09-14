@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 #define GB_MAIN_CLOCK_HZ (4194304U)
 #define GBC_MAIN_CLOCK_HZ (8388608U)
@@ -20,12 +21,7 @@ typedef void (*mem_store_f_t)(uint16_t, uint8_t);
 typedef uint8_t (*rom_load_f_t)(size_t);
 typedef void (*rom_store_f_t)(size_t, uint8_t);
 
-inline bool check_range_inc(unsigned val, unsigned lower, unsigned upper) {
-  return (val >= lower && val <= upper);
-}
-
-inline bool check_range_exc(unsigned val, unsigned lower, unsigned upper) {
-  return (val > lower && val < upper);
-}
+bool check_range_inc(unsigned val, unsigned lower, unsigned upper);
+bool check_range_exc(unsigned val, unsigned lower, unsigned upper);
 
 #endif 

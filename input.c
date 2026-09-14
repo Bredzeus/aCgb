@@ -23,3 +23,9 @@ uint8_t input_construct_register(input_state_t* inputs, uint8_t io_reg){
   }
   return out;
 }
+
+// TODO
+uint8_t input_read(input_state_t* inputs) {
+  (void)inputs;
+  return 0;
+}

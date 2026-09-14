@@ -117,25 +117,28 @@ uint32_t sm83_run(sm83_t* sm83) {
   return sm83->cycles;
 }
 
-void sm83_dump(sm83_t* sm83, sstring_t* str) {
+void sm83_to_sstr(sm83_t* sm83, sstr_t* str) {
   const char print_str[] = "SM83 register file:\npc: 0x%04x\nsp: 0x%04x\na:  0x%02x\nf:  0x%02x\nb:  0x%02x\nc:  0x%02x\nd:  0x%02x\ne:  0x%02x\nh:  0x%02x\nl:  0x%02x\nir: 0x%02x\nie: 0x%02x\n";
+  bool ok = true;
   if (str->size < sizeof(print_str)) {
-    return;
+    ok &= sstr_resize(str, sizeof(print_str));
   }
-  str->len = snprintf(str->buf, str->size, print_str, 
-    sm83->reg_file.pc,
-    sm83->reg_file.sp,
-    sm83->reg_file.a,
-    sm83->reg_file.f,
-    sm83->reg_file.b,
-    sm83->reg_file.c,
-    sm83->reg_file.d,
-    sm83->reg_file.e,
-    sm83->reg_file.h,
-    sm83->reg_file.l,
-    sm83->reg_file.ir,
-    sm83->reg_file.ie
-  );
+  if (ok) {
+    str->len = snprintf(str->data, str->size, print_str, 
+      sm83->reg_file.pc,
+      sm83->reg_file.sp,
+      sm83->reg_file.a,
+      sm83->reg_file.f,
+      sm83->reg_file.b,
+      sm83->reg_file.c,
+      sm83->reg_file.d,
+      sm83->reg_file.e,
+      sm83->reg_file.h,
+      sm83->reg_file.l,
+      sm83->reg_file.ir,
+      sm83->reg_file.ie
+    );
+  }
 }
 
 void handle_halt(sm83_t* sm83) {

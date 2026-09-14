@@ -2,6 +2,8 @@
 #define ROM_H_
 
 #include <stdint.h>
+#include <stdbool.h>
+#include "sstr.h"
 
 #define ROM_TITLE_SIZE (16U)
 #define ROM_MANU_CODE_SIZE (4U)
@@ -95,26 +97,22 @@ void rom_cleanup(void);
 * loads a byte from rom
 * a rom must have already been loaded
 */
-uint8_t rom_load(size_t addr);
-/*
-* Loads a byte from ram
-*/
-uint8_t ram_load(size_t addr);
+uint8_t rom_load(uint16_t addr);
 /*
 * Stores a byte into ram
 * a rom must have already been loaded
 */
-void ram_store(size_t addr, uint8_t val);
+void ram_store(uint16_t addr, uint8_t val);
 /*
 *  Gets rom info
 */
 void rom_get_info(rom_info_t* info);
 
-#ifdef GB_HOST_HAS_FILESYSTEM
+void rom_to_sstr(sstr_t* sstr);
+
 /*
 * Load rom from file
 */
 bool rom_load_from_file(char* filepath);
-#endif /* GB_HOST_HAS_FILESYSTEM */
 
 #endif /* ROM_H_ */

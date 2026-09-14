@@ -23,11 +23,11 @@ void mem_init(mem_load_f_t rom_load, mem_store_f_t rom_store){
 uint8_t mem_load(uint16_t addr){
   uint8_t val = 0;
   if(addr <= ADDR_ROM1_END){
-    val = mbc_load_(addr);
+    val = rom_load_(addr);
   }else if(addr <= ADDR_VRAM_END){
     val = vram[addr - ADDR_VRAM_START];
   }else if(addr <= ADDR_EXRAM_END){
-    val = mbc_load_(addr);
+    val = rom_load_(addr);
   }else if(addr <= ADDR_WRAM0_END){
     val = wram0[addr - ADDR_WRAM0_START];
   }else if(addr <= ADDR_WRAM1_END){
@@ -56,11 +56,11 @@ uint8_t mem_load(uint16_t addr){
 
 void mem_store(uint16_t addr, uint8_t val){
   if(addr <= ADDR_ROM1_END){
-    mbc_store_(addr, val);
+    rom_store_(addr, val);
   }else if(addr <= ADDR_VRAM_END){
     vram[addr - ADDR_VRAM_START] = val;
   }else if(addr <= ADDR_EXRAM_END){
-    mbc_store_(addr, val);
+    rom_store_(addr, val);
   }else if(addr <= ADDR_WRAM0_END){
     wram0[addr - ADDR_WRAM0_START] = val;
   }else if(addr <= ADDR_WRAM1_END){
@@ -75,7 +75,6 @@ void mem_store(uint16_t addr, uint8_t val){
     oam[addr - ADDR_OAM_START] = val;
   }else if(addr <= ADDR_NU_END){
     // behavior is version dependent
-    break;
   }else if(addr <= ADDR_IO_END){
     // TODO: io, split up into its individual components, no point in trying to combine everything
   }else if(addr <= ADDR_HRAM_END){

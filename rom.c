@@ -21,7 +21,6 @@
 static bool rom_info_init(rom_info_t* rom_info);
 static mbc_type_t rom_map_type_to_mbc(uint32_t rom_type);
 
-#ifdef GB_HOST_HAS_FILESYSTEM
 #include <stdio.h>
 static bool rom_save_ram_byte(size_t pos, uint8_t val);
 static bool rom_init_ram(void);
@@ -31,7 +30,6 @@ static uint8_t ram_load_(size_t addr);
 static void ram_store_(size_t addr, uint8_t val);
 static char* rom_filepath = NULL;
 static char* ram_filepath = NULL;
-#endif /* GB_HOST_HAS_FILESYSTEM */
 
 static bool rom_ready = false;
 static rom_info_t rom_info;
@@ -39,26 +37,6 @@ static uint8_t* rom_data = NULL;
 static size_t rom_data_size = 0; // in bytes
 static uint8_t* ram_data = NULL;
 static size_t ram_data_size = 0; // in bytes
-
-bool rom_info_init(rom_info_t* rom_info) {
-  if (!rom_ready){
-    return false;
-  }
-  memcpy(rom_info->title, &rom_data[ROM_OFFSET_TITLE], ROM_TITLE_SIZE);
-  memcpy(rom_info->manufacturer, &rom_data[ROM_OFFSET_MANU_CODE], ROM_MANU_CODE_SIZE);
-  rom_info->cgb_flag = rom_data[ROM_OFFSET_CGB_FLAG];
-  memcpy(rom_info->new_licensee, &rom_data[ROM_OFFSET_NEW_LICENSEE], ROM_LICENSEE_SIZE);
-  rom_info->sgb_flag = rom_data[ROM_OFFSET_SGB_FLAG];
-  rom_info->cart_type = rom_data[ROM_OFFSET_CART_TYPE];
-  rom_info->rom_size = rom_data[ROM_OFFSET_ROM_SIZE];
-  rom_info->ram_size = rom_data[ROM_OFFSET_RAM_SIZE];
-  rom_info->destination = rom_data[ROM_OFFSET_DEST_CODE];
-  rom_info->old_licensee = rom_data[ROM_OFFSET_OLD_LICENSEE];
-  rom_info->version = rom_data[ROM_OFFSET_VERSION];
-  rom_info->header_checksum = rom_data[ROM_OFFSET_HEADER_CHKSUM];
-  memcpy(rom_info->global_checksum, &rom_data[ROM_OFFSET_GLOBAL_CHKSUM], ROM_GLOBAL_CHKSUM_SIZE);
-  return true;
-}
 
 void rom_cleanup(void) {
   if (rom_data != NULL) {
@@ -80,14 +58,14 @@ void rom_cleanup(void) {
     ram_filepath = NULL;
   }
   rom_ready = false;
-  memset(rom_info, 0, sizeof(rom_info_t));
+  memset(&rom_info, 0, sizeof(rom_info_t));
 }
 
 uint8_t rom_load(uint16_t addr) {
   return mbc_load(addr);
 }
 
-void rom_store(uint16_t addr, uint8_t val) {
+void ram_store(uint16_t addr, uint8_t val) {
   mbc_store(addr, val);
 }
 
@@ -107,14 +85,144 @@ uint8_t ram_load_(size_t addr) {
 
 void ram_store_(size_t addr, uint8_t val) {
   if (!rom_ready || addr > ram_data_size) {
-    return false;
+    return;
   }
   ram_data[addr] = val;
-  return rom_save_ram_byte(addr, val);
+  rom_save_ram_byte(addr, val);
 }
 
 void rom_get_info(rom_info_t* info) {
   memcpy(info, &rom_info, sizeof(rom_info_t));
+}
+
+bool rom_load_from_file(char* filepath) {
+  if (rom_ready) {
+    rom_cleanup();
+  }
+  FILE* file;
+  file = fopen(filepath, "rb");
+  if (file == NULL) {
+    return false;
+  }
+  fseek(file, 0L, SEEK_END);
+  rom_data_size = (size_t)ftell(file);
+  rom_data = (uint8_t*)malloc(sizeof(uint8_t) * rom_data_size);
+  if (rom_data == NULL) {
+    rom_data_size = 0;
+    fclose(file);
+    return false;
+  }
+  fseek(file, 0L, SEEK_SET);
+  size_t num_read = fread(rom_data, sizeof(uint8_t), rom_data_size, file);
+  fclose(file);
+  rom_ready = (num_read == rom_data_size);
+  size_t filepath_len = strlen(filepath);
+  rom_filepath = (char*)calloc(filepath_len, sizeof(char));
+  memcpy(rom_filepath, filepath, filepath_len);
+  rom_info_init(&rom_info);
+  mbc_type_t mbc_type = rom_map_type_to_mbc(rom_info.cart_type);
+  mbc_init(mbc_type, rom_load_, ram_store_, ram_load_);
+  rom_ready &= rom_init_ram();
+  return rom_ready;
+}
+
+// Static functions
+
+bool rom_save_ram_byte(size_t pos, uint8_t val) {
+  if (!rom_ready || pos > ram_data_size) {
+    return false;
+  }
+  FILE* file;
+  file = fopen(ram_filepath, "wb");
+  fseek(file, pos, SEEK_SET);
+  fwrite(&val, sizeof(uint8_t), 1, file);
+  fclose(file);
+  return true;
+}
+
+bool rom_init_ram(void) {
+  bool init_ok = true;
+  size_t ram_data_size = 0;
+  switch (rom_info.ram_size) {
+    case ROM_RAM_SIZE_8KB:
+      ram_data_size = 8192;
+      break;
+    case ROM_RAM_SIZE_32KB:
+      ram_data_size = 32768;
+      break;
+    case ROM_RAM_SIZE_128KB:
+      ram_data_size = 131072;
+      break;
+    case ROM_RAM_SIZE_64KB:
+      ram_data_size = 65536;
+      break;
+    case ROM_RAM_SIZE_NONE:
+    case ROM_RAM_SIZE_INV:
+    default:
+      break;
+  }
+  mbc_type_t mbc_type = rom_map_type_to_mbc(rom_info.cart_type);
+  if (mbc_type == MBC_TYPE_MBC2) {
+    ram_data_size = MBC_MBC2_RAM_SIZE;
+  }
+  if (ram_data_size != 0) {
+    ram_data = (uint8_t*)calloc(ram_data_size, sizeof(uint8_t));
+    if (ram_data == NULL) {
+      init_ok = false;
+    }
+    init_ok &= rom_generate_ram_filepath();
+    FILE* file;
+    file = fopen(ram_filepath, "rb");
+    if (file == NULL) {
+      file = fopen(ram_filepath, "wb");
+      if (file == NULL) {
+        init_ok = false;
+      } else {
+        fwrite(ram_data, sizeof(uint8_t), ram_data_size, file);
+      }
+    }
+    fclose(file);
+  }
+  return init_ok;
+}
+
+// Todo: fix .sav generation, doesn't create filename rn
+bool rom_generate_ram_filepath(void) {
+  const char gb_extension[] = ".gb";
+  const char sav_extension[] = ".sav";
+  const size_t sav_len = sizeof(sav_extension) / sizeof(char);
+  const char* rom_gb_ext = strstr(rom_filepath, gb_extension);
+  if (rom_gb_ext == NULL) {
+    return false;
+  }
+  const size_t name_len = rom_gb_ext - rom_filepath;
+  ram_filepath = (char*)malloc((name_len + sav_len) * sizeof(char));
+  if (ram_filepath == NULL) {
+    return false;
+  }
+  memcpy(ram_filepath, rom_filepath, name_len);
+  memcpy(ram_filepath, sav_extension, sav_len);
+  return true;
+}
+
+bool rom_info_init(rom_info_t* rom_info) {
+  if (!rom_ready){
+    return false;
+  }
+  memcpy(rom_info->title, &rom_data[ROM_OFFSET_TITLE], ROM_TITLE_SIZE);
+  memcpy(rom_info->manufacturer, &rom_data[ROM_OFFSET_MANU_CODE], ROM_MANU_CODE_SIZE);
+  rom_info->cgb_flag = rom_data[ROM_OFFSET_CGB_FLAG];
+  memcpy(rom_info->new_licensee, &rom_data[ROM_OFFSET_NEW_LICENSEE], ROM_LICENSEE_SIZE);
+  rom_info->sgb_flag = rom_data[ROM_OFFSET_SGB_FLAG];
+  rom_info->cart_type = rom_data[ROM_OFFSET_CART_TYPE];
+  rom_info->rom_size = rom_data[ROM_OFFSET_ROM_SIZE];
+  rom_info->ram_size = rom_data[ROM_OFFSET_RAM_SIZE];
+  rom_info->destination = rom_data[ROM_OFFSET_DEST_CODE];
+  rom_info->old_licensee = rom_data[ROM_OFFSET_OLD_LICENSEE];
+  rom_info->version = rom_data[ROM_OFFSET_VERSION];
+  rom_info->header_checksum = rom_data[ROM_OFFSET_HEADER_CHKSUM];
+  memcpy(rom_info->global_checksum, &rom_data[ROM_OFFSET_GLOBAL_CHKSUM], ROM_GLOBAL_CHKSUM_SIZE);
+  return true;
 }
 
 mbc_type_t rom_map_type_to_mbc(uint32_t rom_type) {
@@ -174,113 +282,3 @@ mbc_type_t rom_map_type_to_mbc(uint32_t rom_type) {
   }
   return mbc_type;
 }
-
-#ifdef GB_HOST_HAS_FILESYSTEM
-bool rom_save_ram_byte(size_t pos, uint8_t val) {
-  if (!rom_ready || pos > ram_data_size) {
-    return false;
-  }
-  FILE* file;
-  file = fopen(ram_filepath, "wb");
-  fseek(file, pos, SEEK_SET);
-  fwrite(&val, sizeof(uint8_t), 1, file);
-  fclose(file);
-  return true;
-}
-
-bool rom_load_from_file(char* filepath) {
-  if (rom_ready) {
-    rom_cleanup();
-  }
-  FILE* file;
-  file = fopen(filepath, "rb");
-  if (file == NULL) {
-    return false;
-  }
-  fseek(file, 0L, SEEK_END);
-  rom_data_size = (size_t)ftell(file);
-  rom_data = (uint8_t*)malloc(sizeof(uint8_t) * rom_data_size);
-  if (rom_data == NULL) {
-    rom_data_size = 0;
-    fclose(file);
-    return false;
-  }
-  fseek(file, 0L, SEEK_SET);
-  size_t num_read = fread(rom_data, sizeof(uint8_t), rom_data_size, file);
-  fclose(file);
-  rom_ready = (num_read == rom_data_size);
-  size_t filepath_len = strlen(filepath);
-  rom_filepath = (char*)calloc(sizeof(char) * filepath_len);
-  memcpy(rom_filepath, filepath, filepath_len);
-  rom_info_init(&rom_info);
-  mbc_type_t mbc_type = rom_map_type_to_mbc(rom_info.cart_type);
-  mbc_init(mbc_type, rom_load_, rom_store_, ram_store_);
-  rom_ready &= rom_init_ram();
-  return rom_ready;
-}
-
-bool rom_init_ram(void) {
-  bool init_ok = true;
-  size_t ram_data_size = 0;
-  switch (rom_info.ram_size) {
-    case ROM_RAM_SIZE_8KB:
-      ram_data_size = 8192;
-      break;
-    case ROM_RAM_SIZE_32KB:
-      ram_data_size = 32768;
-      break;
-    case ROM_RAM_SIZE_128KB:
-      ram_data_size = 131072;
-      break;
-    case ROM_RAM_SIZE_64KB:
-      ram_data_size = 65536;
-      break;
-    case ROM_RAM_SIZE_NONE:
-    case ROM_RAM_SIZE_INV:
-    default:
-      break;
-  }
-  mbc_type_t mbc_type = rom_map_type_to_mbc(rom_info.cart_type);
-  if (mbc_type == MBC_TYPE_MBC2) {
-    ram_data_size = MBC_MBC2_RAM_SIZE;
-  }
-  if (ram_data_size != 0) {
-    ram_data = (uint8_t*)calloc(ram_data_size, sizeof(uint8_t));
-    if (ram_data == NULL) {
-      init_ok = false;
-    }
-    init_ok &= rom_generate_ram_filepath();
-    FILE* file;
-    file = fopen(ram_filepath, "rb");
-    if (file == NULL) {
-      file = fopen(ram_filepath, "wb");
-      if (file == NULL) {
-        init_ok = false;
-      } else {
-        fwrite(ram_data, sizeof(uint8_t), ram_data_size, file);
-      }
-    }
-    fclose(file);
-  }
-  return init_ok;
-}
-
-bool rom_generate_ram_filepath(void) {
-  const char[] gb_extension = ".gb";
-  const char[] sav_extension = ".sav";
-  const size_t sav_len = sizeof(sav_extension) / sizeof(char);
-  const char* rom_gb_ext = strstr(rom_filepath, gb_extension);
-  if (rom_gb_ext == NULL) {
-    return false;
-  }
-  const size_t name_len = rom_gb_ext - rom_filepath;
-  ram_filepath = (char*)malloc((name_len + sav_len), sizeof(char));
-  if (ram_filepath == NULL) {
-    return false;
-  }
-  memcpy(ram_filepath, rom_fp, name_len);
-  memcpy(ram_filepath, sav_extension, sav_len);
-  return true;
-}
-
-#endif /* GB_HOST_HAS_FILESYSTEM */
