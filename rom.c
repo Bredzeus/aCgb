@@ -186,7 +186,6 @@ bool rom_init_ram(void) {
   return init_ok;
 }
 
-// Todo: fix .sav generation, doesn't create filename rn
 bool rom_generate_ram_filepath(void) {
   const char gb_extension[] = ".gb";
   const char sav_extension[] = ".sav";
@@ -201,7 +200,7 @@ bool rom_generate_ram_filepath(void) {
     return false;
   }
   memcpy(ram_filepath, rom_filepath, name_len);
-  memcpy(ram_filepath, sav_extension, sav_len);
+  memcpy((ram_filepath + name_len), sav_extension, sav_len);
   return true;
 }
 

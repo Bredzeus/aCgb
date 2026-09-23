@@ -16,7 +16,6 @@ C_FLAGS+=-Wall
 C_FILES=main.c
 
 C_FILES+=sstr.c
-C_FILES+=common.c
 
 C_FILES+=gb.c
 C_FILES+=mem.c

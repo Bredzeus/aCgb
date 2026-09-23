@@ -1523,21 +1523,21 @@ sm83_int_res_t handle_interrupt(sm83_t* sm83) {
   uint8_t if_val = sm83->io.mem_load(ADDR_IF);
   const uint8_t combined = ie_val & if_val;
   uint16_t handler_addr = 0;
-  if(combined & INT_VBLANK){
+  if(GET_BIT(combined, INT_VBLANK)){
     handler_addr = 0x0040U;
-    if_val &= ~INT_VBLANK;
-  }else if(combined & INT_LCD){
+    CLEAR_BIT(if_val, INT_VBLANK);
+  }else if(GET_BIT(combined, INT_LCD)){
     handler_addr = 0x0048U;
-    if_val &= ~INT_LCD;
-  }else if(combined & INT_TIMER){
+    CLEAR_BIT(if_val, INT_LCD);
+  }else if(GET_BIT(combined, INT_TIMER)){
     handler_addr = 0x0050U;
-    if_val &= ~INT_TIMER;
-  }else if(combined & INT_SERIAL){
+    CLEAR_BIT(if_val, INT_TIMER);
+  }else if(GET_BIT(combined, INT_SERIAL)){
     handler_addr = 0x0058U;
-    if_val &= ~INT_SERIAL;
-  }else if(combined & INT_JOYPAD){
+    CLEAR_BIT(if_val, INT_SERIAL);
+  }else if(GET_BIT(combined, INT_JOYPAD)){
     handler_addr = 0x0060U;
-    if_val &= ~INT_JOYPAD;
+    CLEAR_BIT(if_val, INT_JOYPAD);
   }
   if(handler_addr){
     if(sm83->ime){
