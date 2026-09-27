@@ -1,6 +1,11 @@
 #ifndef GPU_H_
 #define GPU_H_
 
+#include "common.h"
+#include "sstr.h"
+
+#include <stdbool.h>
+
 #define GPU_SCREEN_WIDTH (160U)
 #define GPU_SCREEN_HEIGHT (144U)
 
@@ -52,5 +57,7 @@ typedef enum gpu_layer_s {
   GPU_LAYER_OBJECTS,
   NUM_GPU_LAYER
 } gpu_layer_t;
+
+bool gpu_init(mem_load_f_t load, mem_store_f_t store);
 
 #endif // GPU_H_
