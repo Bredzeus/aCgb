@@ -18,8 +18,9 @@ typedef struct cbuf_s {
 
 bool cbuf_init(cbuf_t* cbuf, size_t item_size, size_t buf_size);
 void cbuf_deinit(cbuf_t* cbuf);
-void cbuf_wr(cbuf_t* cbuf, const void* val);
-void* cbuf_rd(cbuf_t* cbuf);
+void cbuf_write(cbuf_t* cbuf, const void* val);
+void* cbuf_read(cbuf_t* cbuf);
 size_t cbuf_size(cbuf_t* cbuf);
+void cbuf_clear(cbuf_t* cbuf);
 
 #endif // CBUF_H_

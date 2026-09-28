@@ -42,7 +42,7 @@
 #define BYTES_PER_TILE_LINE (2U)
 
 typedef enum gpu_color_index_s {
-  GPU_COLOR_INDEX_0 = 0,
+  GPU_COLOR_INDEX_0 = 0, // transparent
   GPU_COLOR_INDEX_1,
   GPU_COLOR_INDEX_2,
   GPU_COLOR_INDEX_3,
