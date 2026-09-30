@@ -73,10 +73,9 @@ static inline void call(sm83_t* sm83, uint16_t addr);
 static inline void ret(sm83_t* sm83);
 static inline uint16_t load_nn(sm83_t* sm83);
 
-void sm83_init(sm83_t* sm83, mem_load_f_t load, mem_store_f_t store){
-  // TODO: warn on null
-  sm83->io.mem_load = load;
-  sm83->io.mem_store = store;
+void sm83_init(sm83_t* sm83, mem_interface_t* mem_interface){
+  sm83->io.mem_load = mem_interface->mem_load;
+  sm83->io.mem_store = mem_interface->mem_store;
 }
 
 void sm83_reset(sm83_t* sm83) {

@@ -32,4 +32,9 @@ typedef uint8_t (*rom_load_f_t)(size_t);
 typedef void (*rom_store_f_t)(size_t, uint8_t);
 typedef void (*draw_f_t)(uint8_t, uint8_t, uint16_t);
 
+typedef struct mem_interface_s{
+  mem_load_f_t mem_load;
+  mem_store_f_t mem_store;
+} mem_interface_t;
+
 #endif 

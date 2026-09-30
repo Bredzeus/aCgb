@@ -42,7 +42,7 @@
 #define BYTES_PER_TILE_LINE (2U)
 
 typedef enum gpu_color_index_s {
-  GPU_COLOR_INDEX_0 = 0, // transparent
+  GPU_COLOR_INDEX_0 = 0, // transparent for objs
   GPU_COLOR_INDEX_1,
   GPU_COLOR_INDEX_2,
   GPU_COLOR_INDEX_3,
@@ -58,6 +58,6 @@ typedef enum gpu_layer_s {
   NUM_GPU_LAYER
 } gpu_layer_t;
 
-bool gpu_init(mem_load_f_t load, mem_store_f_t store);
+bool gpu_init(mem_interface_t* mem_interface, bool is_cgb);
 
 #endif // GPU_H_

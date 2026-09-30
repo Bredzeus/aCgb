@@ -36,7 +36,7 @@ typedef struct sm83_io_s {
 
 typedef struct sm83_s {
   sm83_reg_file_t reg_file;
-  sm83_io_t io;
+  mem_interface_t io;
   sm83_state_t state;
   uint32_t cycles;
   bool ime; // interrupt master enable
@@ -45,7 +45,7 @@ typedef struct sm83_s {
 /*
 * Setup sm83 struct 
 */
-void sm83_init(sm83_t* sm83, mem_load_f_t load, mem_store_f_t store);
+void sm83_init(sm83_t* sm83, mem_interface_t* mem_interface);
 
 /*
 * resets the cpu
