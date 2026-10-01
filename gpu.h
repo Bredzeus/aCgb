@@ -59,5 +59,9 @@ typedef enum gpu_layer_s {
 } gpu_layer_t;
 
 bool gpu_init(mem_interface_t* mem_interface, bool is_cgb);
+void gpu_deinit(void);
+
+uint8_t gpu_read_reg(uint16_t addr);
+void gpu_write_reg(uint16_t addr, uint8_t val);
 
 #endif // GPU_H_

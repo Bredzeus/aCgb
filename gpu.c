@@ -21,6 +21,8 @@
 
 #define GPU_PIXEL_BUF_SIZE (16U)
 
+#define GPU_NUM_CGB_PALETTES (8U)
+
 #define GPU_DMG_BG_COLOR_IDX_WHITE (GPU_COLOR_INDEX_0)
 #define GPU_DMG_BG_COLOR_IDX_LIGHT_GRAY (GPU_COLOR_INDEX_1)
 #define GPU_DMG_BG_COLOR_IDX_DARK_GRAY (GPU_COLOR_INDEX_2)
@@ -57,14 +59,26 @@ const uint16_t gpu_dmg_color_values[NUM_GPU_COLOR_INDEX] = {
 }
 
 // Local variables
-static uint8_t gpu_lcd_control = 0;
-static uint8_t gpu_lcd_status = 0;
-static uint8_t gpu_lcd_y = 0;
-static uint8_t gpu_lcd_y_compare = 0;
+static uint8_t gpu_lcd_control = 0; // 0xFF40
+static uint8_t gpu_lcd_status = 0; // 0xFF41
+static uint8_t gpu_view_y = 0; // 0xFF42
+static uint8_t gpu_view_x = 0; // 0xFF43
+static uint8_t gpu_lcd_y = 0; // 0xFF44
+static uint8_t gpu_lcd_y_compare = 0; // 0xFF45
+static uint8_t gpu_oam_dma = 0; // 0xFF46
+static uint8_t gpu_dmg_bg_palette = 0; // 0xFF47
+static uint8_t gpu_dmg_obj_palette_0 = 0; // 0xFF48
+static uint8_t gpu_dmg_obj_palette_1 = 0; // 0xFF49
+static uint8_t gpu_window_y = 0; // 0xFF4A
+static uint8_t gpu_window_x = 0; // 0xFF4B
 
-static uint8_t gpu_bg_palette = 0;
-static uint8_t gpu_obj_palette_0 = 0;
-static uint8_t gpu_obj_palette_1 = 0;
+static uint8_t gpu_bg_palette_idx = 0; // 0xFF68
+static uint8_t gpu_bg_palette_data = 0; // 0xFF69
+static uint8_t gpu_obj_palette_idx = 0; // 0xFF6A
+static uint8_t gpu_obj_palette_data = 0; // 0xFF6B
+
+static uint8_t gpu_cgb_bg_palettes[GPU_NUM_CGB_PALETTES];
+static uint8_t gpu_cgb_obj_palettes[GPU_NUM_CGB_PALETTES];
 
 static cbuf_t gpu_bg_pixel_fifo;
 static cbuf_t gpu_obj_pixel_fifo;
@@ -74,11 +88,13 @@ static bool gpu_is_cgb = false;
 static uint8_t gpu_px_x = 0;
 static uint8_t gpu_px_y = 0;
 
+static uint16_t (*gpu_get_color)(gpu_pixel_t*, gpu_pixel_t*);
 static draw_f_t gpu_draw = NULL;
 static mem_interface_t gpu_io;
 
 // Local function declarations
 
+static uint8_t* gpu_reg_lookup(uint16_t addr);
 static inline uint16_t gpu_make_color(uint8_t palette_h, uint8_t palette_l);
 static void gpu_render(void);
 static uint16_t gpu_get_cgb_color(gpu_pixel_t* bg_px, gpu_pixel_t* obj_px);
@@ -90,11 +106,98 @@ bool gpu_init(mem_interface_t* mem_interface, bool is_cgb) {
   gpu_io.mem_load = mem_interface->mem_load;
   gpu_io.mem_store = mem_interface->mem_store;
   gpu_is_cgb = is_cgb;
+  // Color logic based on hardware
+  if (is_cgb) {
+    gpu_get_color = gpu_get_cgb_color;
+  } else {
+    gpu_get_color = gpu_get_dmg_color;
+  }
+  bool ok = cbuf_init(&gpu_bg_pixel_fifo, sizeof(gpu_pixel_t), GPU_PIXEL_BUF_SIZE);
+  ok &= cbuf_init(&gpu_obj_pixel_fifo, sizeof(gpu_pixel_t), GPU_PIXEL_BUF_SIZE);
+  return ok;
+}
+
+void gpu_deinit(void) {
+  cbuf_deinit(&gpu_bg_pixel_fifo);
+  cbuf_deinit(&gpu_obj_pixel_fifo);
+}
+
+uint8_t gpu_read_reg(uint16_t addr) {
+  uint8_t val = 0;
+  uint8_t* reg_ptr = gpu_reg_lookup(addr);
+  if (reg_ptr != NULL) {
+    val = *reg_ptr;
+  }
+  return val;
+}
+
+void gpu_write_reg(uint16_t addr, uint8_t val) {
+  uint8_t* reg_ptr = gpu_reg_lookup(addr);
+  if (reg_ptr != NULL) {
+    *reg_ptr = val;
+  }
 }
 
 
-
 // Local function implementations
+
+uint8_t* gpu_reg_lookup(uint16_t addr) {
+  uint8_t reg = NULL;
+  switch (addr) {
+    case 0xFF40:
+      reg = &gpu_lcd_control;
+      break;
+    case 0xFF41:
+      reg = &gpu_lcd_status;
+      break;
+    case 0xFF42:
+      reg = &gpu_view_y;
+      break;
+    case 0xFF43:
+      reg = &gpu_view_x;
+      break;
+    case 0xFF44:
+      reg = &gpu_lcd_y;
+      break;
+    case 0xFF45:
+      reg = &gpu_lcd_y_compare;
+      break;
+    case 0xFF46:
+      reg = &gpu_oam_dma;
+      break;
+    case 0xFF47:
+      reg = &gpu_dmg_bg_palette;
+      break;
+    case 0xFF48:
+      reg = &gpu_dmg_obj_palette_0;
+      break;
+    case 0xFF49:
+      reg = &gpu_dmg_obj_palette_1;
+      break;
+    case 0xFF4A:
+      reg = &gpu_window_y;
+      break;
+    case 0xFF4B:
+      reg = &gpu_window_x;
+      break;
+    case 0xFF68:
+      reg = &gpu_bg_palette_idx;
+      break;
+    case 0xFF69:
+      reg = &gpu_bg_palette_data;
+      break;
+    case 0xFF6A:
+      reg = &gpu_obj_palette_idx;
+      break;
+    case 0xFF6B:
+      reg = &gpu_obj_palette_data;
+      break;
+    default:
+      reg = NULL;
+      break;
+  }
+  return reg;
+}
 
 uint16_t gpu_make_color(uint8_t palette_h, uint8_t palette_l) {
   return (((uint16_t)palette_h << 8) | (uint16_t)palette_l);
@@ -116,20 +219,36 @@ void gpu_render(void) {
   if (bg_px == NULL || gpu_px_x >= GPU_SCREEN_WIDTH) {
     return;
   }
-
-  // Color logic based on hardware
-  if (gpu_is_cgb) {
-    color = gpu_get_cgb_color(bg_px, obj_px);
-  } else {
-    color = gpu_get_dmg_color(bg_px, obj_px);
-  }
+  color = gpu_get_color(bg_px, obj_px);
   gpu_draw(gpu_px_x, gpu_px_y, color);
 }
 
 uint16_t gpu_get_cgb_color(gpu_pixel_t* bg_px, gpu_pixel_t* obj_px) {
   uint16_t color = 0;
   bool obj_priority = false;
-  //TODO
+    if (!GET_BIT(gpu_lcd_control, GPU_LCDC_BG_WIN_EN_PRIO)) {
+    obj_priority = true;
+  }
+  // Does the obj pixel have priority?
+  if (obj_px != NULL) {
+    if (obj_px->color != CPU_COLOR_INDEX_0 
+      && GET_BIT(gpu_lcd_control, GPU_LCDC_OBJ_EN)) {
+      obj_priority = (obj_px->bg_priority >= bg_px->bg_priority);
+    }
+  } else if (obj_priority) {
+    // Obj was forced to have priority by LCDC.0 but there is no pixel
+    // return black pixel
+    return gpu_dmg_color_values[GPU_DMG_BG_COLOR_IDX_BLACK];
+  }
+  if (obj_priority) {
+    // color based on object pixel
+    uint8_t palette = gpu_cgb_obj_palettes[obj_px->palette];
+    color = 0
+  } else {
+    // color based on background pixel
+    uint8_t palette = gpu_cgb_bg_palettes[bg_px->palette];
+    color = 0;
+  }
   return color;
 }
 
