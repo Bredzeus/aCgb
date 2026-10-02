@@ -22,6 +22,8 @@
 #define GPU_PIXEL_BUF_SIZE (16U)
 
 #define GPU_NUM_CGB_PALETTES (8U)
+#define GPU_BYTES_PER_PALETTE (8U)
+#define GPU_BYTES_PER_COLOR (2U)
 
 #define GPU_DMG_BG_COLOR_IDX_WHITE (GPU_COLOR_INDEX_0)
 #define GPU_DMG_BG_COLOR_IDX_LIGHT_GRAY (GPU_COLOR_INDEX_1)
@@ -77,8 +79,9 @@ static uint8_t gpu_bg_palette_data = 0; // 0xFF69
 static uint8_t gpu_obj_palette_idx = 0; // 0xFF6A
 static uint8_t gpu_obj_palette_data = 0; // 0xFF6B
 
-static uint8_t gpu_cgb_bg_palettes[GPU_NUM_CGB_PALETTES];
-static uint8_t gpu_cgb_obj_palettes[GPU_NUM_CGB_PALETTES];
+// 2 bytes per palette
+static uint8_t gpu_cgb_bg_palettes[GPU_NUM_CGB_PALETTES * GPU_BYTES_PER_PALETTE];
+static uint8_t gpu_cgb_obj_palettes[GPU_NUM_CGB_PALETTES * GPU_BYTES_PER_PALETTE];
 
 static cbuf_t gpu_bg_pixel_fifo;
 static cbuf_t gpu_obj_pixel_fifo;
@@ -95,7 +98,7 @@ static mem_interface_t gpu_io;
 // Local function declarations
 
 static uint8_t* gpu_reg_lookup(uint16_t addr);
-static inline uint16_t gpu_make_color(uint8_t palette_h, uint8_t palette_l);
+static inline uint16_t gpu_make_color(uint8_t color_h, uint8_t color_l);
 static void gpu_render(void);
 static uint16_t gpu_get_cgb_color(gpu_pixel_t* bg_px, gpu_pixel_t* obj_px);
 static uint16_t gpu_get_dmg_color(gpu_pixel_t* bg_px, gpu_pixel_t* obj_px);
@@ -109,6 +112,7 @@ bool gpu_init(mem_interface_t* mem_interface, bool is_cgb) {
   // Color logic based on hardware
   if (is_cgb) {
     gpu_get_color = gpu_get_cgb_color;
+    memset(&gpu_cgb_bg_palettes, 0xFF, sizeof(gpu_cgb_bg_palettes) / sizeof(uint8_t));
   } else {
     gpu_get_color = gpu_get_dmg_color;
   }
@@ -199,8 +203,8 @@ uint8_t* gpu_reg_lookup(uint16_t addr) {
   return reg;
 }
 
-uint16_t gpu_make_color(uint8_t palette_h, uint8_t palette_l) {
-  return (((uint16_t)palette_h << 8) | (uint16_t)palette_l);
+uint16_t gpu_make_color(uint8_t color_h, uint8_t color_l) {
+  return (((uint16_t)color_h << 8) | (uint16_t)color_l);
 }
 
 void gpu_render(void) {
@@ -242,12 +246,16 @@ uint16_t gpu_get_cgb_color(gpu_pixel_t* bg_px, gpu_pixel_t* obj_px) {
   }
   if (obj_priority) {
     // color based on object pixel
-    uint8_t palette = gpu_cgb_obj_palettes[obj_px->palette];
-    color = 0
+    uint8_t color_idx = (obj_px->palette * GPU_BYTES_PER_PALETTE) + (obj_px->color * GPU_BYTES_PER_COLOR);
+    uint8_t color_low = gpu_cgb_obj_palettes[color_idx];
+    uint8_t color_high = gpu_cgb_obj_palettes[color_idx + 1];
+    color = gpu_make_color(color_high, color_low);
   } else {
     // color based on background pixel
-    uint8_t palette = gpu_cgb_bg_palettes[bg_px->palette];
-    color = 0;
+    uint8_t color_idx = (bg_px->palette * GPU_BYTES_PER_PALETTE) + (bg_px->color * GPU_BYTES_PER_COLOR);
+    uint8_t color_low = gpu_cgb_bg_palettes[color_idx];
+    uint8_t color_high = gpu_cgb_bg_palettes[color_idx + 1];
+    color = gpu_make_color(color_high, color_low);
   }
   return color;
 }
