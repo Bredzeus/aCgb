@@ -13,9 +13,6 @@ bool sstr_init(sstr_t* sstr) {
 }
 
 bool sstr_init_size(sstr_t* sstr, size_t size) {
-  if (sstr->data != NULL && sstr->size != 0) {
-    return false;
-  }
   sstr->len = 0;
   sstr->size = size;
   sstr->data = (char*)malloc(sizeof(char) * size);

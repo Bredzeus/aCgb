@@ -1,42 +1,41 @@
-#include "gb.h"
-#include <stdbool.h>
+#include <stdio.h>
+
+#include <simple2d.h>
 
 #include "common.h"
+#include "sstr.h"
+#include "sm83.h"
+#include "mem.h"
+#include "rom.h"
 
-typedef enum {
-  GB_STATE_READY = 0,
-  GB_STATE_RUNNING,
-  GB_STATE_PAUSED,
-  NUM_GB_STATE
-} gb_state_t;
+S2D_Window* window;
 
-//TODO: decide how memory is gonna work
-//
-// 1. should we just write to a big block of memory
-// then each module will know its own addresses
-// and manage everything on their own update cycles.
-// Pros: simpler (probably), can handle clocking differences
-//
-// 2. Memory writes are intercepted for hardware and
-// specialized module functions are called to act on the update
-// Pros: more event driven, potentially better performance
+void S2D_Init() {
+  window = S2D_CreateWindow("Test", 160, 144);
 
-uint8_t gb_mem_load(uint16_t addr){
-  uint8_t val = 0;
-  bool mmap_hw = true;
-  switch(addr){
-    default: {
-      mmap_hw = false;
-      break;
-    }
+  mem_init(rom_load, ram_store);
+
+  mem_interface_t mem_io = {
+    &mem_load, 
+    &mem_store
+  };
+
+  sm83_t sm83;
+  sm83_init(&sm83, &mem_io);
+  sm83_reset(&sm83);
+
+  ////rom_load_from_file(ROM_FP);
+
+  sstr_t debug;
+  bool ok = sstr_init(&debug);
+  if (ok) {
+    sm83_to_sstr(&sm83, &debug);
+    sstr_print(&debug);
   }
-  if(!mmap_hw){
-    // This is a 
-  }
-
-  return val;
+  sstr_deinit(&debug);
 }
 
-void gb_mem_store(uint16_t addr, uint8_t val){
-
+void S2D_Quit() {
+  // Do not free the window here, its done automatically
+  return;
 }

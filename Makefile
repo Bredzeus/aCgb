@@ -12,9 +12,6 @@ C_FLAGS+=-Wall
 #ACGB_DEFINES="-DGB_HOST_HAS_FILESYSTEM"
 
 
-
-C_FILES=src/main.c
-
 C_FILES+=src/sstr.c
 C_FILES+=src/cbuf.c
 
@@ -28,15 +25,32 @@ C_FILES+=src/sm83/sm83_alu.c
 
 INCLUDES=-I$(PROJ_DIR)/src
 INCLUDES+=-I$(PROJ_DIR)/src/sm83
+INCLUDES+=-I$(PROJ_DIR)/lib/simple2d/include
+INCLUDES+=-I$(PROJ_DIR)/lib/simple2d/deps/include
 
-.PHONY: regular clean
+LIB_DIRS=-L$(PROJ_DIR)/lib/simple2d/build
+LIB_DIRS+=-L$(PROJ_DIR)/lib/simple2d/deps/linux/x86_64
 
-regular:
+LIBS=-lsimple2d
+LIBS+=-lSDL3
+LIBS+=-lSDL3_image
+LIBS+=-lSDL3_mixer
+LIBS+=-lSDL3_ttf
+LIBS+=-lm
+
+.PHONY: regular clean lib src
+
+regular: lib src
+
+lib:
+	$(MAKE) -C lib/simple2d deps all
+
+src:
 	mkdir -p $(BUILD_DIR)
-	gcc -c $(C_FILES) $(INCLUDES) $(ACGB_DEFINES) $(C_FLAGS)
+	gcc -c $(C_FILES) $(INCLUDES) $(C_FLAGS)
 #probably could do this in a better way
 	mv $(PROJ_DIR)/*.o $(BUILD_DIR)
-	gcc -g -o $(BUILD_DIR)/$(PROJ_NAME) $(BUILD_DIR)/*.o
+	gcc -g -o $(BUILD_DIR)/$(PROJ_NAME) $(BUILD_DIR)/*.o $(LIB_DIRS) $(LIBS)
 
 clean:
 	rm -rf $(BUILD_DIR)

@@ -1,0 +1,3 @@
+[submodule "lib/simple2d"]
+	path = lib/simple2d
+	url = https://github.com/simple2d/simple2d.git
