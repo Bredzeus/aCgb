@@ -13,21 +13,21 @@ C_FLAGS+=-Wall
 
 
 
-C_FILES=main.c
+C_FILES=src/main.c
 
-C_FILES+=sstr.c
-C_FILES+=cbuf.c
+C_FILES+=src/sstr.c
+C_FILES+=src/cbuf.c
 
-C_FILES+=gb.c
-C_FILES+=mem.c
-C_FILES+=mbc.c
-C_FILES+=rom.c
-C_FILES+=input.c
-C_FILES+=sm83/sm83.c
-C_FILES+=sm83/sm83_alu.c
+C_FILES+=src/gb.c
+C_FILES+=src/mem.c
+C_FILES+=src/mbc.c
+C_FILES+=src/rom.c
+C_FILES+=src/input.c
+C_FILES+=src/sm83/sm83.c
+C_FILES+=src/sm83/sm83_alu.c
 
-INCLUDES=-I$(PROJ_DIR)
-INCLUDES+=-I$(PROJ_DIR)/sm83
+INCLUDES=-I$(PROJ_DIR)/src
+INCLUDES+=-I$(PROJ_DIR)/src/sm83
 
 .PHONY: regular clean
 
