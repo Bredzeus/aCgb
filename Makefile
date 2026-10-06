@@ -25,25 +25,26 @@ C_FILES+=src/sm83/sm83_alu.c
 
 INCLUDES=-I$(PROJ_DIR)/src
 INCLUDES+=-I$(PROJ_DIR)/src/sm83
-INCLUDES+=-I$(PROJ_DIR)/lib/simple2d/include
-INCLUDES+=-I$(PROJ_DIR)/lib/simple2d/deps/include
+INCLUDES+=-I$(PROJ_DIR)/lib/SDL/include
+INCLUDES+=-I$(PROJ_DIR)/lib/SDL_mixer/include
+INCLUDES+=-I$(PROJ_DIR)/lib/SDL_ttf/include
 
-LIB_DIRS=-L$(PROJ_DIR)/lib/simple2d/build
-LIB_DIRS+=-L$(PROJ_DIR)/lib/simple2d/deps/linux/x86_64
+LIB_DIRS=-L$(PROJ_DIR)/lib/build/SDL
+LIB_DIRS+=-L$(PROJ_DIR)/lib/build/SDL_mixer
+LIB_DIRS+=-L$(PROJ_DIR)/lib/build/SDL_ttf
 
-LIBS=-lsimple2d
 LIBS+=-lSDL3
-LIBS+=-lSDL3_image
 LIBS+=-lSDL3_mixer
 LIBS+=-lSDL3_ttf
 LIBS+=-lm
 
-.PHONY: regular clean lib src
+.PHONY: regular clean lib src libclean
 
 regular: lib src
 
 lib:
-	$(MAKE) -C lib/simple2d deps all
+	cd lib && cmake -S . -B build && cmake --build build --parallel
+	cd ..
 
 src:
 	mkdir -p $(BUILD_DIR)
@@ -54,3 +55,6 @@ src:
 
 clean:
 	rm -rf $(BUILD_DIR)
+
+libclean:
+	rm -rf $(PROJ_DIR)/lib/build

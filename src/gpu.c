@@ -79,7 +79,6 @@ static uint8_t gpu_bg_palette_data = 0; // 0xFF69
 static uint8_t gpu_obj_palette_idx = 0; // 0xFF6A
 static uint8_t gpu_obj_palette_data = 0; // 0xFF6B
 
-// 2 bytes per palette
 static uint8_t gpu_cgb_bg_palettes[GPU_NUM_CGB_PALETTES * GPU_BYTES_PER_PALETTE];
 static uint8_t gpu_cgb_obj_palettes[GPU_NUM_CGB_PALETTES * GPU_BYTES_PER_PALETTE];
 
