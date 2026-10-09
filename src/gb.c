@@ -18,6 +18,13 @@ static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
 static uint64_t last_time = 0;
 
+static SDL_Surface *scr_surface = NULL;
+static SDL_Texture *screen = NULL;
+static size_t bytes_per_px = 0;
+
+static double fps_samples[10];
+static uint32_t pos = 0;
+
 static void gb_draw(uint8_t x, uint8_t y, uint16_t color);
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
@@ -33,6 +40,20 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     return SDL_APP_FAILURE;
   }
   SDL_SetRenderLogicalPresentation(renderer, GB_SCREEN_W, GB_SCREEN_H, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+
+  screen = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_W, GB_SCREEN_H);
+  if (screen == NULL) {
+    printf("Failed to create screen texture\n");
+    return SDL_APP_FAILURE;
+  }
+
+  scr_surface = SDL_CreateSurface(GB_SCREEN_W, GB_SCREEN_H, SDL_PIXELFORMAT_ABGR1555);
+  if (scr_surface == NULL) {
+    printf("Failed to create surface for screen texture\n");
+    return SDL_APP_FAILURE;
+  }
+
+  bytes_per_px = SDL_BYTESPERPIXEL(scr_surface->format);
 
   mem_init(rom_load, ram_store);
 
@@ -70,38 +91,53 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
 
 SDL_AppResult SDL_AppIterate(void* appstate) {
   // once per frame update
-  //SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-  //SDL_RenderClear(renderer);
   clock_t time;
   time = clock();
-  for (uint8_t x = 0; x < GB_SCREEN_W / 2; x++) {
-    for (uint8_t y = 0; y < GB_SCREEN_H / 2; y++) {
+
+  if(!SDL_LockTextureToSurface(screen, NULL, &scr_surface)) {
+    printf("uh oh, failed to lock screen texture\n");
+  }
+
+  for (uint8_t x = 0; x < GB_SCREEN_W; x++) {
+    for (uint8_t y = 0; y < GB_SCREEN_H; y++) {
       uint16_t color = ((uint16_t)x << 8) | (uint16_t)y;
-      gb_draw(x, y, color);
+      gb_draw_v2(x, y, color);
     }
   }
 
-  SDL_RenderPresent(renderer);
-
+  SDL_UnlockTexture(screen);
 
   time = clock() - time;
+
+  // Todo: render texture + present should be at the monitor refresh rate
+  // not once per frame since it tanks fps
+  SDL_RenderTexture(renderer, screen, NULL, NULL);
+  SDL_RenderPresent(renderer);
   double t_diff = ((double)time) / CLOCKS_PER_SEC;
   double pot_fps = 1 / t_diff;
-  printf("delta_t=%f, potential fps=%f\n", t_diff, pot_fps);
+  fps_samples[pos] = pot_fps;
+  pos++;
+  pos %= 10;
+  double fps_avg = 0;
+  for (uint32_t i = 0; i < 10; i++) {
+    fps_avg += fps_samples[i];
+  }
+  fps_avg /= 10;
+  printf("delta_t total=%f, potential fps=%f\n", t_diff, pot_fps);
+  printf("avg fps=%f\n", fps_avg);
+
   return SDL_APP_CONTINUE;
 }
 
 void SDL_AppQuit(void* appstate, SDL_AppResult result) {
+  SDL_DestroyTexture(screen);
+  SDL_DestroySurface(scr_surface);
   SDL_Quit();
 }
 
-
 void gb_draw(uint8_t x, uint8_t y, uint16_t color) {
-  // way too slow
-  // fps capped at ~30 drawing 160 by 144
-  uint8_t r = (color & 0x001F) << 3;
-  uint8_t g = (color & 0x03E0) >> 2;
-  uint8_t b = (color & 0x7C00) >> 7;
-  SDL_SetRenderDrawColor(renderer, r, g, b, SDL_ALPHA_OPAQUE);
-  SDL_RenderPoint(renderer, (float)x, (float)y);
+  // reimplement part of SDL_WriteSurfacePixel
+  // Todo: fix this
+  uint8_t *p = (uint8_t *)scr_surface->pixels + y * scr_surface->pitch + x * bytes_per_px;
+  memcpy(p, &color, bytes_per_px);
 }
