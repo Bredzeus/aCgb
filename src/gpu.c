@@ -25,6 +25,8 @@
 #define GPU_BYTES_PER_PALETTE (8U)
 #define GPU_BYTES_PER_COLOR (2U)
 
+#define GPU_TILES_PER_MAP_DIM (32U)
+
 #define GPU_DMG_BG_COLOR_IDX_WHITE (GPU_COLOR_INDEX_0)
 #define GPU_DMG_BG_COLOR_IDX_LIGHT_GRAY (GPU_COLOR_INDEX_1)
 #define GPU_DMG_BG_COLOR_IDX_DARK_GRAY (GPU_COLOR_INDEX_2)
@@ -89,6 +91,9 @@ static gpu_mode_t gpu_state = GPU_MODE_OAM;
 static bool gpu_is_cgb = false;
 static uint8_t gpu_px_x = 0;
 static uint8_t gpu_px_y = 0;
+static uint8_t gpu_fetcher_px_x = 0;
+static uint8_t gpu_fetcher_px_y = 0;
+static bool gpu_window_y_cond = false;
 
 static uint16_t (*gpu_get_color)(gpu_pixel_t*, gpu_pixel_t*);
 static draw_f_t gpu_draw = NULL;
@@ -101,6 +106,10 @@ static inline uint16_t gpu_make_color(uint8_t color_h, uint8_t color_l);
 static void gpu_render(void);
 static uint16_t gpu_get_cgb_color(gpu_pixel_t* bg_px, gpu_pixel_t* obj_px);
 static uint16_t gpu_get_dmg_color(gpu_pixel_t* bg_px, gpu_pixel_t* obj_px);
+static void gpu_fetch_pixels(void);
+static uint16_t gpu_get_tilemap_addr(uint16_t window_x_start, uint16_t window_x_end);
+static uint8_t gpu_fetcher_get_x_coord(uint16_t window_x_start);
+static uint8_t gpu_fetcher_get_y_coord(uint16_t window_x_start);
 
 // Interface function implementations
 
@@ -289,4 +298,54 @@ uint16_t gpu_get_dmg_color(gpu_pixel_t* bg_px, gpu_pixel_t* obj_px) {
     }
   }
   return color;
+}
+
+void gpu_fetch_pixels(void) {
+  uint16_t window_x_start = gpu_window_x - 7; // window x offset by 7 for some reason
+  uint16_t window_x_end = gpu_window_x + GPU_SCREEN_WIDTH - 7;
+  uint16_t window_y_start = gpu_window_y;
+  uint16_t window_y_end = gpu_window_y + GPU_SCREEN_HEIGHT;
+  uint16_t tilemap_addr = gpu_get_tilemap_addr(window_x_start, window_x_end);
+  uint8_t x_coord = gpu_fetcher_get_x_coord(window_x_start);
+  uint8_t y_coord = gpu_fetcher_get_y_coord(window_x_start);
+  uint8_t tile_addr = 0xFF;
+  if (gpu_state != GPU_MODE_DRAW) {
+    uint16_t tile_addr = tilemap_addr + (coord_y * GPU_TILES_PER_MAP_DIM) + coord_x;
+  }
+  uint8_t tile_idx = gpu_io.mem_load(tile_addr);
+  
+
+}
+
+uint16_t gpu_get_tilemap_addr(uint16_t window_x_start, uint16_t window_x_end) {
+  uint16_t tilemap_addr = ADDR_VRAM_TILEMAP0_START;
+  if (GET_BIT(gpu_lcd_control, GPU_LCDC_BG_TILE_MAP) 
+  && !RANGE_INC(gpu_px_x, window_x_start, window_x_end)) {
+    tilemap_addr = ADDR_VRAM_TILEMAP1_START;
+  }
+  if (GET_BIT(gpu_lcd_control, GPU_LCDC_WIN_TILE_MAP)
+  && RANGE_INC(gpu_px_x, window_x_start, window_x_end)) {
+    tilemap_addr = ADDR_VRAM_TILEMAP1_START;
+  }
+  return tilemap_addr;
+}
+
+uint8_t gpu_fetcher_get_x_coord(uint16_t window_x_start) {
+  uint8_t x_coord = 0;
+  if (gpu_window_y_cond && (gpu_px_x >= window_x_start)) {
+    x_coord = gpu_px_x - window_x_start;
+  } else {
+    x_coord = (gpu_view_x / 8 + gpu_fetcher_px_x) & 0x1F;
+  }
+  return x_coord;
+}
+
+uint8_t gpu_fetcher_get_y_coord(uint16_t window_x_start) {
+  uint8_t y_coord = 0;
+  if (gpu_window_y_cond && (gpu_px_x >= window_x_start)) {
+    y_coord = gpu_px_y - window_y_start;
+  } else {
+    y_coord = (gpu_px_y + gpu_view_y) & 0xFF;
+  }
+  return y_coord;
 }
