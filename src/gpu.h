@@ -21,47 +21,11 @@
 #define ADDR_VRAM_TILEMAP1_START (0x9C00U)
 #define ADDR_VRAM_TILEMAP1_END (0x9FFFU)
 
-#define ADDR_GPU_STAT (0xFF41U)
-#define ADDR_GPU_SCY (0xFF42U)
-#define ADDR_GPU_SCX (0xFF43U)
-#define ADDR_GPU_LCD_Y (0xFF44U)
-#define ADDR_GPU_LYC (0xFF45U)
-
-#define ADDR_GPU_BGP (0xFF47U)
-#define ADDR_GPU_OBP0 (0xFF48U)
-#define ADDR_GPU_OBP1 (0xFF49U)
-#define ADDR_GPU_WIN_Y (0xFF4AU)
-#define ADDR_GPU_WIN_X (0xFF4BU)
-
-#define GPU_NUM_TILES (384U)
-#define GPU_NUM_TILES_CGB (768U)
-
-#define PIXELS_PER_TILE (8U)
-#define BYTES_PER_TILE (16U)
-#define TILES_PER_BLOCK (128U)
-#define BYTES_PER_TILE_LINE (2U)
-
-typedef enum gpu_color_index_s {
-  GPU_COLOR_INDEX_0 = 0, // transparent for objs
-  GPU_COLOR_INDEX_1,
-  GPU_COLOR_INDEX_2,
-  GPU_COLOR_INDEX_3,
-  NUM_GPU_COLOR_INDEX
-} gpu_color_index_t;
-
-typedef uint8_t[4] gpu_palette_t;
-
-typedef enum gpu_layer_s {
-  GPU_LAYER_BACKGROUND = 0,
-  GPU_LAYER_WINDOW,
-  GPU_LAYER_OBJECTS,
-  NUM_GPU_LAYER
-} gpu_layer_t;
-
 bool gpu_init(mem_interface_t* mem_interface, bool is_cgb);
 void gpu_deinit(void);
 
 uint8_t gpu_read_reg(uint16_t addr);
 void gpu_write_reg(uint16_t addr, uint8_t val);
+void gpu_run(void);
 
 #endif // GPU_H_

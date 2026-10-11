@@ -6,15 +6,11 @@
 #include "sm83.h"
 #include "mem.h"
 #include "rom.h"
+#include "gpu.h"
 
 #define SDL_MAIN_USE_CALLBACKS 1
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
-
-#define GB_SHOW_FPS 0
-
-#define GB_SCREEN_H (144U)
-#define GB_SCREEN_W (160U)
 
 #define GB_WINDOW_SCALE (3U)
 
@@ -33,7 +29,7 @@ static void gb_draw(uint8_t x, uint8_t y, uint16_t color);
 static bool init_renderer(void);
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
-  SDL_SetAppMetadata("Test", "0.1", "");
+  SDL_SetAppMetadata(ACGB_NAME, ACGB_VERSION, "");
 
   if (!SDL_Init(SDL_INIT_VIDEO)) {
     SDL_Log("Couldn't initialize SDL: %s", SDL_GetError());
@@ -44,12 +40,11 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     return SDL_APP_FAILURE;
   }
 
-  mem_init(rom_load, ram_store);
+  mem_interface_t rom_io = {&rom_load, &ram_store};
+  mem_interface_t gpu_io = {&gpu_read_reg, &gpu_write_reg};
+  mem_interface_t mem_io = {&mem_load, &mem_store};
 
-  mem_interface_t mem_io = {
-    &mem_load, 
-    &mem_store
-  };
+  mem_init(&rom_io, &gpu_io);
 
   sm83_t sm83;
   sm83_init(&sm83, &mem_io);
@@ -87,8 +82,8 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     printf("Failed to lock screen texture\n");
   }
 
-  for (uint8_t x = 0; x < GB_SCREEN_W; x++) {
-    for (uint8_t y = 0; y < GB_SCREEN_H; y++) {
+  for (uint8_t x = 0; x < GPU_SCREEN_WIDTH; x++) {
+    for (uint8_t y = 0; y < GPU_SCREEN_HEIGHT; y++) {
       uint16_t color = ((uint16_t)x << 8) | (uint16_t)y;
       gb_draw(x, y, color);
     }
@@ -115,7 +110,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     fps_avg += fps_samples[i];
   }
   fps_avg /= 10;
-#if GB_SHOW_FPS == 1
+#if ACGB_SHOW_FPS == 1
   printf("delta_t total=%f, potential fps=%f\n", t_diff, pot_fps);
   printf("avg fps=%f\n", fps_avg);
 #endif
@@ -131,27 +126,25 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
 
 void gb_draw(uint8_t x, uint8_t y, uint16_t color) {
   // reimplements part of SDL_WriteSurfacePixel
-  // Todo: fix this
   uint16_t color_alpha_fix = color | 0x8000;
   uint8_t *p = (uint8_t *)scr_surface->pixels + y * scr_surface->pitch + x * bytes_per_px;
   memcpy(p, &color_alpha_fix, bytes_per_px);
 }
 
 bool init_renderer(void) {
-  if (!SDL_CreateWindowAndRenderer("idk", GB_SCREEN_W * GB_WINDOW_SCALE, GB_SCREEN_H * GB_WINDOW_SCALE, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
+  if (!SDL_CreateWindowAndRenderer(ACGB_NAME, GPU_SCREEN_WIDTH * GB_WINDOW_SCALE, GPU_SCREEN_HEIGHT * GB_WINDOW_SCALE, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
     SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
     return false;
   }
-  SDL_SetRenderLogicalPresentation(renderer, GB_SCREEN_W, GB_SCREEN_H, SDL_LOGICAL_PRESENTATION_LETTERBOX);
-  //SDL_SetRenderLogicalPresentation(renderer, GB_SCREEN_W, GB_SCREEN_H, SDL_LOGICAL_PRESENTATION_DISABLED);
+  SDL_SetRenderLogicalPresentation(renderer, GPU_SCREEN_WIDTH, GPU_SCREEN_HEIGHT, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
-  screen = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, GB_SCREEN_W, GB_SCREEN_H);
+  screen = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, GPU_SCREEN_WIDTH, GPU_SCREEN_HEIGHT);
   if (screen == NULL) {
     printf("Failed to create screen texture\n");
     return false;
   }
 
-  scr_surface = SDL_CreateSurface(GB_SCREEN_W, GB_SCREEN_H, SDL_PIXELFORMAT_ABGR1555);
+  scr_surface = SDL_CreateSurface(GPU_SCREEN_WIDTH, GPU_SCREEN_HEIGHT, SDL_PIXELFORMAT_ABGR1555);
   if (scr_surface == NULL) {
     printf("Failed to create surface for screen texture\n");
     return false;
@@ -159,8 +152,8 @@ bool init_renderer(void) {
 
   bytes_per_px = SDL_BYTESPERPIXEL(scr_surface->format);
 
-  printf("Window size: %ux%u (x%u)\n", GB_SCREEN_W * GB_WINDOW_SCALE, GB_SCREEN_H * GB_WINDOW_SCALE, GB_WINDOW_SCALE);
-  printf("Window logical size: %ux%u\n", GB_SCREEN_W, GB_SCREEN_H);
+  printf("Window size: %ux%u (x%u)\n", GPU_SCREEN_WIDTH * GB_WINDOW_SCALE, GPU_SCREEN_HEIGHT * GB_WINDOW_SCALE, GB_WINDOW_SCALE);
+  printf("Window logical size: %ux%u\n", GPU_SCREEN_WIDTH, GPU_SCREEN_HEIGHT);
   printf("Bytes per pixel: %lu\n", bytes_per_px);
 
   return true;

@@ -29,11 +29,6 @@ typedef struct sm83_reg_file_s {
   uint8_t ie;
 } sm83_reg_file_t;
 
-typedef struct sm83_io_s {
-  mem_load_f_t mem_load;
-  mem_store_f_t mem_store;
-} sm83_io_t;
-
 typedef struct sm83_s {
   sm83_reg_file_t reg_file;
   mem_interface_t io;

@@ -1,9 +1,5 @@
 #include "mem.h"
 
-typedef struct mem_io_s {
-  bool todo;
-} mem_io_t;
-
 static uint8_t vram[VRAM_SIZE];
 static uint8_t wram0[WRAM0_SIZE];
 static uint8_t wram1[WRAM1_SIZE];
@@ -12,22 +8,24 @@ static uint8_t hram[HRAM_SIZE];
 static uint8_t oam[OAM_SIZE];
 static uint8_t interrupt_enable;
 
-static mem_load_f_t rom_load_ = NULL;
-static mem_store_f_t rom_store_ = NULL;
+static mem_interface_t mem_rom_io = {0};
+static mem_interface_t mem_gpu_io = {0};
 
-void mem_init(mem_load_f_t rom_load, mem_store_f_t rom_store){
-  rom_load_ = rom_load;
-  rom_store_ = rom_store;
+void mem_init(mem_interface_t *rom_io, mem_interface_t *gpu_io){
+  mem_rom_io.load = rom_io->load;
+  mem_rom_io.store = rom_io->store;
+  mem_gpu_io.load = gpu_io->load;
+  mem_gpu_io.store = gpu_io->store;
 }
 
 uint8_t mem_load(uint16_t addr){
   uint8_t val = 0;
   if(addr <= ADDR_ROM1_END){
-    val = rom_load_(addr);
+    val = mem_rom_io.load(addr);
   }else if(addr <= ADDR_VRAM_END){
     val = vram[addr - ADDR_VRAM_START];
   }else if(addr <= ADDR_EXRAM_END){
-    val = rom_load_(addr);
+    val = mem_rom_io.load(addr);
   }else if(addr <= ADDR_WRAM0_END){
     val = wram0[addr - ADDR_WRAM0_START];
   }else if(addr <= ADDR_WRAM1_END){
@@ -38,14 +36,17 @@ uint8_t mem_load(uint16_t addr){
     // Echo RAM (mirrors 0xC000 - 0xDDFF)
     val = mem_load((addr - ADDR_ERAM_START) + ADDR_WRAM0_START);
   }else if(addr <= ADDR_OAM_END){
-    // might need to be mapped to the gpu
     val = oam[addr - ADDR_OAM_START];
   }else if(addr <= ADDR_NU_END){
     // behavior is version dependent
     val = 0;
   }else if(addr <= ADDR_IO_END){
-    // TODO: io, split up into its individual components, no point in trying to combine everything
     val = 0;
+    if (RANGE_INC(addr, ADDR_GPU0_START, ADDR_GPU0_END)
+    || RANGE_INC(addr, ADDR_GPU1_START, ADDR_GPU1_END)
+    || RANGE_INC(addr, ADDR_GPU2_START, ADDR_GPU2_END)) {
+      val = mem_gpu_io.load(addr);
+    }
   }else if(addr <= ADDR_HRAM_END){
     val = hram[addr - ADDR_HRAM_START];
   }else{
@@ -56,11 +57,11 @@ uint8_t mem_load(uint16_t addr){
 
 void mem_store(uint16_t addr, uint8_t val){
   if(addr <= ADDR_ROM1_END){
-    rom_store_(addr, val);
+    mem_rom_io.store(addr, val);
   }else if(addr <= ADDR_VRAM_END){
     vram[addr - ADDR_VRAM_START] = val;
   }else if(addr <= ADDR_EXRAM_END){
-    rom_store_(addr, val);
+    mem_rom_io.store(addr, val);
   }else if(addr <= ADDR_WRAM0_END){
     wram0[addr - ADDR_WRAM0_START] = val;
   }else if(addr <= ADDR_WRAM1_END){
@@ -71,12 +72,15 @@ void mem_store(uint16_t addr, uint8_t val){
     // Echo RAM (mirrors 0xC000 - 0xDDFF)
     mem_store((addr - ADDR_ERAM_START) + ADDR_WRAM0_START, val);
   }else if(addr <= ADDR_OAM_END){
-    // might need to be mapped to the gpu
     oam[addr - ADDR_OAM_START] = val;
   }else if(addr <= ADDR_NU_END){
     // behavior is version dependent
   }else if(addr <= ADDR_IO_END){
-    // TODO: io, split up into its individual components, no point in trying to combine everything
+    if (RANGE_INC(addr, ADDR_GPU0_START, ADDR_GPU0_END)
+    || RANGE_INC(addr, ADDR_GPU1_START, ADDR_GPU1_END)
+    || RANGE_INC(addr, ADDR_GPU2_START, ADDR_GPU2_END)) {
+      mem_gpu_io.store(addr, val);
+    }
   }else if(addr <= ADDR_HRAM_END){
     hram[addr - ADDR_HRAM_START] = val;
   }else{

@@ -3,7 +3,7 @@
 
 #include "common.h"
 
-void mem_init(mem_load_f_t rom_load, mem_store_f_t rom_store);
+void mem_init(mem_interface_t *rom_io, mem_interface_t *gpu_io);
 uint8_t mem_load(uint16_t addr);
 void mem_store(uint16_t addr, uint8_t val);
 

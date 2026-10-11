@@ -74,8 +74,8 @@ static inline void ret(sm83_t* sm83);
 static inline uint16_t load_nn(sm83_t* sm83);
 
 void sm83_init(sm83_t* sm83, mem_interface_t* mem_interface){
-  sm83->io.mem_load = mem_interface->mem_load;
-  sm83->io.mem_store = mem_interface->mem_store;
+  sm83->io.load = mem_interface->load;
+  sm83->io.store = mem_interface->store;
 }
 
 void sm83_reset(sm83_t* sm83) {
@@ -148,7 +148,7 @@ void handle_halt(sm83_t* sm83) {
 
 void handle_stop(sm83_t* sm83) {
   // exits stop on controller input
-  uint8_t joypad = sm83->io.mem_load(ADDR_JOYPAD);
+  uint8_t joypad = sm83->io.load(ADDR_JOYPAD);
   if((joypad & 0x0F) != 0x0F){
     sm83->state = SM83_STATE_RUN;
   }
@@ -159,7 +159,7 @@ void handle_run(sm83_t* sm83) {
     return; // skip everything else if an interrupt is serviced
   }
 
-  const uint8_t instr = sm83->io.mem_load(sm83->reg_file.pc);
+  const uint8_t instr = sm83->io.load(sm83->reg_file.pc);
   sm83->reg_file.pc++;
 
   switch(instr) {
@@ -185,76 +185,76 @@ void handle_run(sm83_t* sm83) {
     sm83->cycles = 1;
     break;
   case SM83_INSTR_CB_op: {
-    const uint8_t cb_op = sm83->io.mem_load(sm83->reg_file.pc);
+    const uint8_t cb_op = sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     exec_cb_op(sm83, cb_op);
     break;
   }
   case SM83_INSTR_LD_A_pBC: {
     const uint16_t addr = combine(sm83->reg_file.b, sm83->reg_file.c);
-    sm83->reg_file.a = sm83->io.mem_load(addr);
+    sm83->reg_file.a = sm83->io.load(addr);
     sm83->cycles += 2;
     break;
   }
   case SM83_INSTR_LD_A_pDE: {
     const uint16_t addr = combine(sm83->reg_file.d, sm83->reg_file.e);
-    sm83->reg_file.a = sm83->io.mem_load(addr);
+    sm83->reg_file.a = sm83->io.load(addr);
     sm83->cycles += 2;
     break;
   }
   case SM83_INSTR_LD_pBC_A: {
     const uint16_t addr = combine(sm83->reg_file.b, sm83->reg_file.c);
-    sm83->io.mem_store(addr, sm83->reg_file.a);
+    sm83->io.store(addr, sm83->reg_file.a);
     sm83->cycles += 2;
     break;
   }
   case SM83_INSTR_LD_pDE_A: {
     const uint16_t addr = combine(sm83->reg_file.d, sm83->reg_file.e);
-    sm83->io.mem_store(addr, sm83->reg_file.a);
+    sm83->io.store(addr, sm83->reg_file.a);
     sm83->cycles += 2;
     break;
   }
   case SM83_INSTR_LD_A_pnn: {
     const uint16_t nn = load_nn(sm83);
-    sm83->reg_file.a = sm83->io.mem_load(nn);
+    sm83->reg_file.a = sm83->io.load(nn);
     sm83->cycles += 4;
     break;
   }
   case SM83_INSTR_LD_pnn_A: {
     const uint16_t nn = load_nn(sm83);
-    sm83->io.mem_store(nn, sm83->reg_file.a);
+    sm83->io.store(nn, sm83->reg_file.a);
     sm83->cycles += 4;
     break;
   }
   case SM83_INSTR_LDH_A_pC: {
-    sm83->reg_file.a = sm83->io.mem_load(combine(0xffU, sm83->reg_file.c));
+    sm83->reg_file.a = sm83->io.load(combine(0xffU, sm83->reg_file.c));
     sm83->cycles += 2;
     break;
   }
   case SM83_INSTR_LDH_pC_A: {
     const uint16_t addr = combine(0xffU, sm83->reg_file.c);
-    sm83->io.mem_store(addr, sm83->reg_file.a);
+    sm83->io.store(addr, sm83->reg_file.a);
     sm83->cycles += 2;
     break;
   }
   case SM83_INSTR_LDH_A_pn: {
-    const uint8_t low = sm83->io.mem_load(sm83->reg_file.pc);
+    const uint8_t low = sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
-    sm83->reg_file.a = sm83->io.mem_load(combine(0xffU, low));
+    sm83->reg_file.a = sm83->io.load(combine(0xffU, low));
     sm83->cycles += 3;
     break;
   }
   case SM83_INSTR_LDH_pn_A: {
-    const uint8_t low = sm83->io.mem_load(sm83->reg_file.pc);
+    const uint8_t low = sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     const uint16_t addr = combine(0xffU, low);
-    sm83->io.mem_store(addr, sm83->reg_file.a);
+    sm83->io.store(addr, sm83->reg_file.a);
     sm83->cycles += 3;
     break;
   }
   case SM83_INSTR_LD_A_pHLm: {
     uint16_t hl = combine(sm83->reg_file.h, sm83->reg_file.l);
-    sm83->reg_file.a = sm83->io.mem_load(hl);
+    sm83->reg_file.a = sm83->io.load(hl);
     hl--;
     separate(hl, &sm83->reg_file.h, &sm83->reg_file.l);
     sm83->cycles += 2;
@@ -262,7 +262,7 @@ void handle_run(sm83_t* sm83) {
   }
   case SM83_INSTR_LD_pHLm_A: {
     uint16_t hl = combine(sm83->reg_file.h, sm83->reg_file.l);
-    sm83->io.mem_store(hl, sm83->reg_file.a);
+    sm83->io.store(hl, sm83->reg_file.a);
     hl--;
     separate(hl, &sm83->reg_file.h, &sm83->reg_file.l);
     sm83->cycles += 2;
@@ -270,7 +270,7 @@ void handle_run(sm83_t* sm83) {
   }
   case SM83_INSTR_LD_A_pHLp: {
     uint16_t hl = combine(sm83->reg_file.h, sm83->reg_file.l);
-    sm83->reg_file.a = sm83->io.mem_load(hl);
+    sm83->reg_file.a = sm83->io.load(hl);
     hl++;
     separate(hl, &sm83->reg_file.h, &sm83->reg_file.l);
     sm83->cycles += 2;
@@ -278,32 +278,32 @@ void handle_run(sm83_t* sm83) {
   }
   case SM83_INSTR_LD_pHLp_A: {
     uint16_t hl = combine(sm83->reg_file.h, sm83->reg_file.l);
-    sm83->io.mem_store(hl, sm83->reg_file.a);
+    sm83->io.store(hl, sm83->reg_file.a);
     hl++;
     separate(hl, &sm83->reg_file.h, &sm83->reg_file.l);
     sm83->cycles += 2;
     break;
   }
   case SM83_INSTR_LD_BC_nn: {
-    sm83->reg_file.c = sm83->io.mem_load(sm83->reg_file.pc);
+    sm83->reg_file.c = sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
-    sm83->reg_file.b = sm83->io.mem_load(sm83->reg_file.pc);
+    sm83->reg_file.b = sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     sm83->cycles += 3;
     break;
   }
   case SM83_INSTR_LD_DE_nn: {
-    sm83->reg_file.e = sm83->io.mem_load(sm83->reg_file.pc);
+    sm83->reg_file.e = sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
-    sm83->reg_file.d = sm83->io.mem_load(sm83->reg_file.pc);
+    sm83->reg_file.d = sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     sm83->cycles += 3;
     break;
   }
   case SM83_INSTR_LD_HL_nn: {
-    sm83->reg_file.l = sm83->io.mem_load(sm83->reg_file.pc);
+    sm83->reg_file.l = sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
-    sm83->reg_file.h = sm83->io.mem_load(sm83->reg_file.pc);
+    sm83->reg_file.h = sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     sm83->cycles += 3;
     break;
@@ -319,9 +319,9 @@ void handle_run(sm83_t* sm83) {
     uint8_t sp_l = 0;
     uint8_t sp_h = 0;
     separate(sm83->reg_file.sp, &sp_h, &sp_l);
-    sm83->io.mem_store(nn, sp_l);
+    sm83->io.store(nn, sp_l);
     nn++;
-    sm83->io.mem_store(nn, sp_h);
+    sm83->io.store(nn, sp_h);
     sm83->cycles += 5;
     break;
   }
@@ -346,7 +346,7 @@ void handle_run(sm83_t* sm83) {
     break;
   }
   case SM83_INSTR_LD_HL_SPpe: {
-    int8_t e = (int8_t)sm83->io.mem_load(sm83->reg_file.pc);
+    int8_t e = (int8_t)sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     uint16_t result = 0;
     if(e < 0){
@@ -373,7 +373,7 @@ void handle_run(sm83_t* sm83) {
     break;
   }
   case SM83_INSTR_ADD_n: {
-    const uint8_t n = sm83->io.mem_load(sm83->reg_file.pc);
+    const uint8_t n = sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     sm83_alu_t alu = {
       .primary = sm83->reg_file.a,
@@ -387,7 +387,7 @@ void handle_run(sm83_t* sm83) {
     break;
   }
   case SM83_INSTR_ADC_n: {
-    const uint8_t n = sm83->io.mem_load(sm83->reg_file.pc);
+    const uint8_t n = sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     sm83_alu_t alu = {
       .primary = sm83->reg_file.a,
@@ -401,7 +401,7 @@ void handle_run(sm83_t* sm83) {
     break;
   }
   case SM83_INSTR_SUB_n: {
-    const uint8_t n = sm83->io.mem_load(sm83->reg_file.pc);
+    const uint8_t n = sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     sm83_alu_t alu = {
       .primary = sm83->reg_file.a,
@@ -415,7 +415,7 @@ void handle_run(sm83_t* sm83) {
     break;
   }
   case SM83_INSTR_SBC_n: {
-    const uint8_t n = sm83->io.mem_load(sm83->reg_file.pc);
+    const uint8_t n = sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     sm83_alu_t alu = {
       .primary = sm83->reg_file.a,
@@ -430,7 +430,7 @@ void handle_run(sm83_t* sm83) {
   }
   case SM83_INSTR_CP_n: {
     // Same as SUB n but we don't write back to the accumulator
-    const uint8_t n = sm83->io.mem_load(sm83->reg_file.pc);
+    const uint8_t n = sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     sm83_alu_t alu = {
       .primary = sm83->reg_file.a,
@@ -443,7 +443,7 @@ void handle_run(sm83_t* sm83) {
     break;
   }
   case SM83_INSTR_AND_n: {
-    const uint8_t n = sm83->io.mem_load(sm83->reg_file.pc);
+    const uint8_t n = sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     sm83_alu_t alu = {
       .primary = sm83->reg_file.a,
@@ -457,7 +457,7 @@ void handle_run(sm83_t* sm83) {
     break;
   }
   case SM83_INSTR_OR_n: {
-    const uint8_t n = sm83->io.mem_load(sm83->reg_file.pc);
+    const uint8_t n = sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     sm83_alu_t alu = {
       .primary = sm83->reg_file.a,
@@ -471,7 +471,7 @@ void handle_run(sm83_t* sm83) {
     break;
   }
   case SM83_INSTR_XOR_n: {
-    const uint8_t n = sm83->io.mem_load(sm83->reg_file.pc);
+    const uint8_t n = sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     sm83_alu_t alu = {
       .primary = sm83->reg_file.a,
@@ -624,7 +624,7 @@ void handle_run(sm83_t* sm83) {
     break;
   }
   case SM83_INSTR_ADD_SP_n: {
-    const uint8_t n = sm83->io.mem_load(sm83->reg_file.pc);
+    const uint8_t n = sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     uint16_t carry = sm83->reg_file.sp & ((uint16_t)n);
     sm83->reg_file.sp += ((uint16_t)n);
@@ -759,14 +759,14 @@ void handle_run(sm83_t* sm83) {
     break;
   }
   case SM83_INSTR_JR_e: {
-    const int8_t e = (int8_t)sm83->io.mem_load(sm83->reg_file.pc);
+    const int8_t e = (int8_t)sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     jump_relative(sm83, e);
     sm83->cycles += 3;
     break;
   }
   case SM83_INSTR_JR_NZ_e: {
-    const int8_t e = (int8_t)sm83->io.mem_load(sm83->reg_file.pc);
+    const int8_t e = (int8_t)sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     if(!(sm83->reg_file.f & FLAG_ZERO)){
       jump_relative(sm83, e);
@@ -777,7 +777,7 @@ void handle_run(sm83_t* sm83) {
     break;
   }
   case SM83_INSTR_JR_Z_e: {
-    const int8_t e = (int8_t)sm83->io.mem_load(sm83->reg_file.pc);
+    const int8_t e = (int8_t)sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     if(sm83->reg_file.f & FLAG_ZERO){
       jump_relative(sm83, e);
@@ -788,7 +788,7 @@ void handle_run(sm83_t* sm83) {
     break;
   }
   case SM83_INSTR_JR_NC_e: {
-    const int8_t e = (int8_t)sm83->io.mem_load(sm83->reg_file.pc);
+    const int8_t e = (int8_t)sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     if(!(sm83->reg_file.f & FLAG_CARRY)){
       jump_relative(sm83, e);
@@ -799,7 +799,7 @@ void handle_run(sm83_t* sm83) {
     break;
   }
   case SM83_INSTR_JR_C_e: {
-    const int8_t e = (int8_t)sm83->io.mem_load(sm83->reg_file.pc);
+    const int8_t e = (int8_t)sm83->io.load(sm83->reg_file.pc);
     sm83->reg_file.pc++;
     if(sm83->reg_file.f & FLAG_CARRY){
       jump_relative(sm83, e);
@@ -1011,12 +1011,12 @@ void handle_run(sm83_t* sm83) {
         // indirect HL
         const uint16_t hl = combine(sm83->reg_file.h, sm83->reg_file.l);
         sm83_alu_t alu = {
-          .primary = sm83->io.mem_load(hl),
+          .primary = sm83->io.load(hl),
           .secondary = 0, // unused for INC
           .flags = sm83->reg_file.f
         };
         sm83_alu_execute(SM83_ALU_OP_INC, &alu);
-        sm83->io.mem_store(hl, alu.primary);
+        sm83->io.store(hl, alu.primary);
         sm83->reg_file.f = alu.flags;
         sm83->cycles += 3;
       } else {
@@ -1037,12 +1037,12 @@ void handle_run(sm83_t* sm83) {
         // indirect HL
         const uint16_t hl = combine(sm83->reg_file.h, sm83->reg_file.l);
         sm83_alu_t alu = {
-          .primary = sm83->io.mem_load(hl),
+          .primary = sm83->io.load(hl),
           .secondary = 0, // unused for DEC
           .flags = sm83->reg_file.f
         };
         sm83_alu_execute(SM83_ALU_OP_DEC, &alu);
-        sm83->io.mem_store(hl, alu.primary);
+        sm83->io.store(hl, alu.primary);
         sm83->reg_file.f = alu.flags;
         sm83->cycles += 3;
       } else {
@@ -1064,7 +1064,7 @@ void handle_run(sm83_t* sm83) {
         const uint16_t hl = combine(sm83->reg_file.h, sm83->reg_file.l);
         sm83_alu_t alu = {
           .primary = sm83->reg_file.a,
-          .secondary = sm83->io.mem_load(hl), 
+          .secondary = sm83->io.load(hl), 
           .flags = sm83->reg_file.f
         };
         sm83_alu_execute(SM83_ALU_OP_AND, &alu);
@@ -1090,7 +1090,7 @@ void handle_run(sm83_t* sm83) {
         const uint16_t hl = combine(sm83->reg_file.h, sm83->reg_file.l);
         sm83_alu_t alu = {
           .primary = sm83->reg_file.a,
-          .secondary = sm83->io.mem_load(hl), 
+          .secondary = sm83->io.load(hl), 
           .flags = sm83->reg_file.f
         };
         sm83_alu_execute(SM83_ALU_OP_OR, &alu);
@@ -1116,7 +1116,7 @@ void handle_run(sm83_t* sm83) {
         const uint16_t hl = combine(sm83->reg_file.h, sm83->reg_file.l);
         sm83_alu_t alu = {
           .primary = sm83->reg_file.a,
-          .secondary = sm83->io.mem_load(hl), 
+          .secondary = sm83->io.load(hl), 
           .flags = sm83->reg_file.f
         };
         sm83_alu_execute(SM83_ALU_OP_XOR, &alu);
@@ -1148,7 +1148,7 @@ void load_reg_std(sm83_t* sm83, uint8_t instr) {
   // target_idx 6 is a write to memory
   if (target_idx == 6) {
     uint16_t addr = combine(sm83->reg_file.h, sm83->reg_file.l);
-    sm83->io.mem_store(addr, source_val);
+    sm83->io.store(addr, source_val);
     sm83->cycles++; // Extra cycle for mem access
   } else {
     uint8_t* target = reg_lookup_ptr(sm83, target_idx);
@@ -1180,7 +1180,7 @@ uint8_t reg_lookup_val(sm83_t* sm83, uint8_t index) {
     break;
   case 6:
     uint16_t addr = combine(sm83->reg_file.h, sm83->reg_file.l);
-    value = sm83->io.mem_load(addr);
+    value = sm83->io.load(addr);
     sm83->cycles++; // Extra cycle for mem access
     break;
   case 7:
@@ -1225,13 +1225,13 @@ uint8_t* reg_lookup_ptr(sm83_t* sm83, uint8_t index) {
 }
 
 void load_reg_imm(sm83_t* sm83, uint8_t instr) {
-  const uint8_t imm = sm83->io.mem_load(sm83->reg_file.pc);
+  const uint8_t imm = sm83->io.load(sm83->reg_file.pc);
   sm83->reg_file.pc++;
   const uint8_t target_idx = (SM83_MID_INDEX_MASK & instr) >> 3;
   // target_idx 6 is a write to memory
   if (target_idx == 6) {
     uint16_t addr = combine(sm83->reg_file.h, sm83->reg_file.l);
-    sm83->io.mem_store(addr, imm);
+    sm83->io.store(addr, imm);
     sm83->cycles++; // Extra cycle for mem access
   } else {
     uint8_t* target = reg_lookup_ptr(sm83, target_idx);
@@ -1264,16 +1264,16 @@ void push_rr(sm83_t* sm83, uint8_t instr) {
   uint8_t low = 0; 
   separate(rr, &high, &low);
   sm83->reg_file.sp--;
-  sm83->io.mem_store(sm83->reg_file.sp, high);
+  sm83->io.store(sm83->reg_file.sp, high);
   sm83->reg_file.sp--;
-  sm83->io.mem_store(sm83->reg_file.sp, low);
+  sm83->io.store(sm83->reg_file.sp, low);
   sm83->cycles += 4;
 }
 
 void pop_rr(sm83_t* sm83, uint8_t instr) {
-  const uint8_t low = sm83->io.mem_load(sm83->reg_file.sp);
+  const uint8_t low = sm83->io.load(sm83->reg_file.sp);
   sm83->reg_file.sp++;
-  const uint8_t high = sm83->io.mem_load(sm83->reg_file.sp);
+  const uint8_t high = sm83->io.load(sm83->reg_file.sp);
   sm83->reg_file.sp++;
   const uint8_t rr_mask = 0b00110000U;
   const uint8_t rr_index = (rr_mask & instr) >> 4;
@@ -1416,7 +1416,7 @@ void exec_cb_op(sm83_t* sm83, uint8_t cb_op) {
   }
   if(val_update){
     if(cb_index == 6){ // HL indirect
-      sm83->io.mem_store(combine(sm83->reg_file.h, sm83->reg_file.l), val);
+      sm83->io.store(combine(sm83->reg_file.h, sm83->reg_file.l), val);
       sm83->cycles++; // Extra cycle for mem store
     }else{
       uint8_t* reg = reg_lookup_ptr(sm83, cb_index);
@@ -1468,7 +1468,7 @@ void exec_cb_op(sm83_t* sm83, uint8_t cb_op) {
   }
   if(val_update){
     if(reg_idx == 6){ // HL indirect
-      sm83->io.mem_store(combine(sm83->reg_file.h, sm83->reg_file.l), val);
+      sm83->io.store(combine(sm83->reg_file.h, sm83->reg_file.l), val);
       sm83->cycles++; // Extra cycle for mem store
     }else{
       uint8_t* reg = reg_lookup_ptr(sm83, cb_index);
@@ -1493,24 +1493,24 @@ void call(sm83_t* sm83, uint16_t addr) {
   uint8_t pc_high = 0;
   separate(sm83->reg_file.pc, &pc_high, &pc_low);
   sm83->reg_file.sp--;
-  sm83->io.mem_store(sm83->reg_file.sp, pc_high);
+  sm83->io.store(sm83->reg_file.sp, pc_high);
   sm83->reg_file.sp--;
-  sm83->io.mem_store(sm83->reg_file.sp, pc_low);
+  sm83->io.store(sm83->reg_file.sp, pc_low);
   sm83->reg_file.pc = addr;
 }
 
 void ret(sm83_t* sm83) {
-  const uint8_t low = sm83->io.mem_load(sm83->reg_file.sp);
+  const uint8_t low = sm83->io.load(sm83->reg_file.sp);
   sm83->reg_file.sp++;
-  const uint8_t high = sm83->io.mem_load(sm83->reg_file.sp);
+  const uint8_t high = sm83->io.load(sm83->reg_file.sp);
   sm83->reg_file.sp++;
   sm83->reg_file.pc = combine(high, low);
 }
 
 uint16_t load_nn(sm83_t* sm83) {
-  const uint8_t nn_low = sm83->io.mem_load(sm83->reg_file.pc);
+  const uint8_t nn_low = sm83->io.load(sm83->reg_file.pc);
   sm83->reg_file.pc++;
-  const uint8_t nn_high = sm83->io.mem_load(sm83->reg_file.pc);
+  const uint8_t nn_high = sm83->io.load(sm83->reg_file.pc);
   sm83->reg_file.pc++;
   return combine(nn_high, nn_low);
 }
@@ -1518,8 +1518,8 @@ uint16_t load_nn(sm83_t* sm83) {
 sm83_int_res_t handle_interrupt(sm83_t* sm83) {
   sm83_int_res_t retval = SM83_INT_RES_NOP;
 
-  const uint8_t ie_val = sm83->io.mem_load(ADDR_IE);
-  uint8_t if_val = sm83->io.mem_load(ADDR_IF);
+  const uint8_t ie_val = sm83->io.load(ADDR_IE);
+  uint8_t if_val = sm83->io.load(ADDR_IF);
   const uint8_t combined = ie_val & if_val;
   uint16_t handler_addr = 0;
   if(GET_BIT(combined, INT_VBLANK)){
@@ -1541,7 +1541,7 @@ sm83_int_res_t handle_interrupt(sm83_t* sm83) {
   if(handler_addr){
     if(sm83->ime){
       sm83->ime = false;
-      sm83->io.mem_store(ADDR_IF, if_val);
+      sm83->io.store(ADDR_IF, if_val);
       call(sm83, handler_addr);
       sm83->cycles += 5;
       retval = SM83_INT_RES_EXEC;

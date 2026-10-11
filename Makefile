@@ -1,4 +1,3 @@
-# compilation defines:
 PROJ_NAME=aCgb
 PROJ_DIR=$(shell pwd)
 BUILD_DIR=$(PROJ_DIR)/build
@@ -8,8 +7,10 @@ C_FLAGS=-std=c11
 C_FLAGS+=-Werror
 C_FLAGS+=-Wall
 
-# Defines
-#ACGB_DEFINES="-DGB_HOST_HAS_FILESYSTEM"
+# Project #defines
+ACGB_DEFINES="-DACGB_NAME=\"aCgb\""
+ACGB_DEFINES+="-DACGB_VERSION=\"0.0.1\""
+ACGB_DEFINES+="-DACGB_SHOW_FPS=0"
 
 
 C_FILES+=src/sstr.c
@@ -22,6 +23,7 @@ C_FILES+=src/rom.c
 C_FILES+=src/input.c
 C_FILES+=src/sm83/sm83.c
 C_FILES+=src/sm83/sm83_alu.c
+C_FILES+=src/gpu.c
 
 INCLUDES=-I$(PROJ_DIR)/src
 INCLUDES+=-I$(PROJ_DIR)/src/sm83
@@ -48,7 +50,7 @@ lib:
 
 src:
 	mkdir -p $(BUILD_DIR)
-	gcc -c $(C_FILES) $(INCLUDES) $(C_FLAGS)
+	gcc -c $(C_FILES) $(INCLUDES) $(C_FLAGS) $(ACGB_DEFINES)
 #probably could do this in a better way
 	mv $(PROJ_DIR)/*.o $(BUILD_DIR)
 	gcc -g -o $(BUILD_DIR)/$(PROJ_NAME) $(BUILD_DIR)/*.o $(LIB_DIRS) $(LIBS)
