@@ -82,6 +82,8 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     printf("Failed to lock screen texture\n");
   }
 
+  //mem_run_dma_controller();
+
   for (uint8_t x = 0; x < GPU_SCREEN_WIDTH; x++) {
     for (uint8_t y = 0; y < GPU_SCREEN_HEIGHT; y++) {
       uint16_t color = ((uint16_t)x << 8) | (uint16_t)y;

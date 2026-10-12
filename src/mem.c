@@ -1,5 +1,7 @@
 #include "mem.h"
 
+#define MEM_DMA_TRANSFER_NUM_BYTES (160U)
+
 static uint8_t vram[VRAM_SIZE];
 static uint8_t wram0[WRAM0_SIZE];
 static uint8_t wram1[WRAM1_SIZE];
@@ -7,6 +9,9 @@ static uint8_t lram[LRAM_SIZE];
 static uint8_t hram[HRAM_SIZE];
 static uint8_t oam[OAM_SIZE];
 static uint8_t interrupt_enable;
+
+static uint8_t mem_dma_control_reg = 0; // 0xFF46
+static uint8_t mem_dma_remaining_bytes = 0;
 
 static mem_interface_t mem_rom_io = {0};
 static mem_interface_t mem_gpu_io = {0};
@@ -46,6 +51,8 @@ uint8_t mem_load(uint16_t addr){
     || RANGE_INC(addr, ADDR_GPU1_START, ADDR_GPU1_END)
     || RANGE_INC(addr, ADDR_GPU2_START, ADDR_GPU2_END)) {
       val = mem_gpu_io.load(addr);
+    } else if (addr == ADDR_DMA) {
+      val = mem_dma_control_reg;
     }
   }else if(addr <= ADDR_HRAM_END){
     val = hram[addr - ADDR_HRAM_START];
@@ -80,10 +87,22 @@ void mem_store(uint16_t addr, uint8_t val){
     || RANGE_INC(addr, ADDR_GPU1_START, ADDR_GPU1_END)
     || RANGE_INC(addr, ADDR_GPU2_START, ADDR_GPU2_END)) {
       mem_gpu_io.store(addr, val);
+    } else if (addr == ADDR_DMA) {
+      mem_dma_control_reg = val;
+      mem_dma_remaining_bytes = MEM_DMA_TRANSFER_NUM_BYTES;
     }
   }else if(addr <= ADDR_HRAM_END){
     hram[addr - ADDR_HRAM_START] = val;
   }else{
     interrupt_enable = val;
+  }
+}
+
+void mem_run_dma_controller(void) {
+  if (mem_dma_remaining_bytes < 0) {
+    uint8_t offset = MEM_DMA_TRANSFER_NUM_BYTES - mem_dma_remaining_bytes;
+    uint8_t source_addr = ((uint16_t)mem_dma_control_reg << 8) | (uint16_t)offset;
+    oam[offset] = mem_load(source_addr);
+    mem_dma_remaining_bytes--;
   }
 }
