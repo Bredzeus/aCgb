@@ -7,12 +7,26 @@
 #include "mem.h"
 #include "rom.h"
 #include "gpu.h"
+#include "input.h"
 
 #define SDL_MAIN_USE_CALLBACKS 1
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
 #define GB_WINDOW_SCALE (3U)
+
+typedef struct input_map_s {
+  SDL_Scancode button_right;
+  SDL_Scancode button_left;
+  SDL_Scancode button_up;
+  SDL_Scancode button_down;
+  SDL_Scancode button_A;
+  SDL_Scancode button_B;
+  SDL_Scancode button_select;
+  SDL_Scancode button_start;
+  SDL_Scancode speedup;
+  SDL_Scancode pause;
+} input_map_t;
 
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
@@ -25,8 +39,23 @@ static size_t bytes_per_px = 0;
 static double fps_samples[10];
 static uint32_t pos = 0;
 
+static input_map_t keyboard_map = {
+  SDL_SCANCODE_D,
+  SDL_SCANCODE_A,
+  SDL_SCANCODE_W,
+  SDL_SCANCODE_S,
+  SDL_SCANCODE_J,
+  SDL_SCANCODE_K,
+  SDL_SCANCODE_M,
+  SDL_SCANCODE_N,
+  SDL_SCANCODE_UNKNOWN,
+  SDL_SCANCODE_UNKNOWN
+};
+
 static void gb_draw(uint8_t x, uint8_t y, uint16_t color);
 static bool init_renderer(void);
+
+static void gb_read_keyboard(input_state_t* keyboard_state);
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   SDL_SetAppMetadata(ACGB_NAME, ACGB_VERSION, "");
@@ -43,12 +72,15 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   mem_interface_t rom_io = {&rom_load, &ram_store};
   mem_interface_t gpu_io = {&gpu_read_reg, &gpu_write_reg};
   mem_interface_t mem_io = {&mem_load, &mem_store};
+  mem_interface_t input_io = {&input_load, &input_store};
 
-  mem_init(&rom_io, &gpu_io);
+  mem_init(&rom_io, &gpu_io, &input_io);
 
   sm83_t sm83;
   sm83_init(&sm83, &mem_io);
   sm83_reset(&sm83);
+
+  input_enable_device(INPUT_DEVICE_KEYBOARD, true);
 
   ////rom_load_from_file(ROM_FP);
 
@@ -82,6 +114,20 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     printf("Failed to lock screen texture\n");
   }
 
+  input_state_t keyboard;
+  gb_read_keyboard(&keyboard);
+  input_set_device_state(INPUT_DEVICE_KEYBOARD, &keyboard);
+#if ACGB_SHOW_KB == 1
+  printf("%u%u%u%u %u%u%u%u\n", 
+    keyboard.button_left,
+    keyboard.button_right,
+    keyboard.button_up,
+    keyboard.button_down,
+    keyboard.button_A,
+    keyboard.button_B,
+    keyboard.button_start,
+    keyboard.button_select);
+#endif // ACGB_SHOW_KB == 1
   //mem_run_dma_controller();
 
   for (uint8_t x = 0; x < GPU_SCREEN_WIDTH; x++) {
@@ -159,4 +205,18 @@ bool init_renderer(void) {
   printf("Bytes per pixel: %lu\n", bytes_per_px);
 
   return true;
+}
+
+void gb_read_keyboard(input_state_t* keyboard_state) {
+  const bool* key_states = SDL_GetKeyboardState(NULL);
+  keyboard_state->button_right = key_states[keyboard_map.button_right];
+  keyboard_state->button_left = key_states[keyboard_map.button_left];
+  keyboard_state->button_up = key_states[keyboard_map.button_up];
+  keyboard_state->button_down = key_states[keyboard_map.button_down];
+  keyboard_state->button_A = key_states[keyboard_map.button_A];
+  keyboard_state->button_B = key_states[keyboard_map.button_B];
+  keyboard_state->button_select = key_states[keyboard_map.button_select];
+  keyboard_state->button_start = key_states[keyboard_map.button_start];
+  keyboard_state->speedup = key_states[keyboard_map.speedup];
+  keyboard_state->pause = key_states[keyboard_map.pause];
 }

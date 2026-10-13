@@ -15,12 +15,15 @@ static uint8_t mem_dma_remaining_bytes = 0;
 
 static mem_interface_t mem_rom_io = {0};
 static mem_interface_t mem_gpu_io = {0};
+static mem_interface_t mem_input_io = {0};
 
-void mem_init(mem_interface_t *rom_io, mem_interface_t *gpu_io){
+void mem_init(mem_interface_t *rom_io, mem_interface_t *gpu_io, mem_interface_t *input_io){
   mem_rom_io.load = rom_io->load;
   mem_rom_io.store = rom_io->store;
   mem_gpu_io.load = gpu_io->load;
   mem_gpu_io.store = gpu_io->store;
+  mem_input_io.load = input_io->load;
+  mem_input_io.store = input_io->store;
 }
 
 uint8_t mem_load(uint16_t addr){
@@ -53,6 +56,8 @@ uint8_t mem_load(uint16_t addr){
       val = mem_gpu_io.load(addr);
     } else if (addr == ADDR_DMA) {
       val = mem_dma_control_reg;
+    } else if (addr == ADDR_IO_JOYPAD) {
+      val = mem_input_io.load(addr);
     }
   }else if(addr <= ADDR_HRAM_END){
     val = hram[addr - ADDR_HRAM_START];
@@ -90,6 +95,8 @@ void mem_store(uint16_t addr, uint8_t val){
     } else if (addr == ADDR_DMA) {
       mem_dma_control_reg = val;
       mem_dma_remaining_bytes = MEM_DMA_TRANSFER_NUM_BYTES;
+    } else if (addr == ADDR_IO_JOYPAD) {
+      mem_input_io.store(addr, val);
     }
   }else if(addr <= ADDR_HRAM_END){
     hram[addr - ADDR_HRAM_START] = val;

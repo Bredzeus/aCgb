@@ -332,18 +332,17 @@ void gpu_fetch_bg_pixels(void) {
 
   uint8_t x_coord = 0;
   if (gpu_window_y_cond && (gpu_px_x >= window_x_start)) {
-    x_coord = gpu_px_x - window_x_start;
+    x_coord = (gpu_px_x - window_x_start) / 8;
   } else {
     x_coord = (gpu_view_x / 8 + gpu_fetcher_px_x) & 0x1F;
   }
 
   uint8_t y_coord = 0;
   if (gpu_window_y_cond && (gpu_px_x >= window_x_start)) {
-    y_coord = gpu_px_y - window_y_start;
+    y_coord = (gpu_px_y - window_y_start) / 8;
   } else {
     y_coord = (gpu_px_y + gpu_view_y) & 0xFF;
   }
-
 
   // todo: check that access isn't blocked
   uint16_t tile_addr = tilemap_addr + (y_coord * GPU_TILES_PER_MAP_DIM) + x_coord;

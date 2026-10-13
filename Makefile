@@ -2,6 +2,8 @@ PROJ_NAME=aCgb
 PROJ_DIR=$(shell pwd)
 BUILD_DIR=$(PROJ_DIR)/build
 
+# current avg fps: 1220
+
 # Compiler options
 C_FLAGS=-std=c11
 C_FLAGS+=-Werror
@@ -11,6 +13,7 @@ C_FLAGS+=-Wall
 ACGB_DEFINES="-DACGB_NAME=\"aCgb\""
 ACGB_DEFINES+="-DACGB_VERSION=\"0.0.1\""
 ACGB_DEFINES+="-DACGB_SHOW_FPS=0"
+ACGB_DEFINES+="-DACGB_SHOW_KB=0"
 
 
 C_FILES+=src/sstr.c
