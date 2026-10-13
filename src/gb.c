@@ -8,6 +8,7 @@
 #include "rom.h"
 #include "gpu.h"
 #include "input.h"
+#include "timer.h"
 
 #define SDL_MAIN_USE_CALLBACKS 1
 #include <SDL3/SDL.h>
@@ -73,14 +74,16 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   mem_interface_t gpu_io = {&gpu_read_reg, &gpu_write_reg};
   mem_interface_t mem_io = {&mem_load, &mem_store};
   mem_interface_t input_io = {&input_load, &input_store};
+  mem_interface_t timer_io = {&timer_reg_load, &timer_reg_store};
 
-  mem_init(&rom_io, &gpu_io, &input_io);
+  mem_init(&rom_io, &gpu_io, &input_io, &timer_io);
 
   sm83_t sm83;
   sm83_init(&sm83, &mem_io);
   sm83_reset(&sm83);
 
   input_enable_device(INPUT_DEVICE_KEYBOARD, true);
+  timer_init(&mem_io);
 
   ////rom_load_from_file(ROM_FP);
 
@@ -129,6 +132,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     keyboard.button_select);
 #endif // ACGB_SHOW_KB == 1
   //mem_run_dma_controller();
+  //timer_run(1);
 
   for (uint8_t x = 0; x < GPU_SCREEN_WIDTH; x++) {
     for (uint8_t y = 0; y < GPU_SCREEN_HEIGHT; y++) {

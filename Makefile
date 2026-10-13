@@ -27,6 +27,7 @@ C_FILES+=src/input.c
 C_FILES+=src/sm83/sm83.c
 C_FILES+=src/sm83/sm83_alu.c
 C_FILES+=src/gpu.c
+C_FILES+=src/timer.c
 
 INCLUDES=-I$(PROJ_DIR)/src
 INCLUDES+=-I$(PROJ_DIR)/src/sm83

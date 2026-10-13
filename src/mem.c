@@ -8,7 +8,8 @@ static uint8_t wram1[WRAM1_SIZE];
 static uint8_t lram[LRAM_SIZE];
 static uint8_t hram[HRAM_SIZE];
 static uint8_t oam[OAM_SIZE];
-static uint8_t interrupt_enable;
+static uint8_t interrupt_enable = 0; // 0xFFFF
+static uint8_t interrupt_flags = 0; // 0xFF0F
 
 static uint8_t mem_dma_control_reg = 0; // 0xFF46
 static uint8_t mem_dma_remaining_bytes = 0;
@@ -16,14 +17,20 @@ static uint8_t mem_dma_remaining_bytes = 0;
 static mem_interface_t mem_rom_io = {0};
 static mem_interface_t mem_gpu_io = {0};
 static mem_interface_t mem_input_io = {0};
+static mem_interface_t mem_timer_io = {0};
 
-void mem_init(mem_interface_t *rom_io, mem_interface_t *gpu_io, mem_interface_t *input_io){
+void mem_init(mem_interface_t *rom_io,
+              mem_interface_t *gpu_io,
+              mem_interface_t *input_io,
+              mem_interface_t *timer_io){
   mem_rom_io.load = rom_io->load;
   mem_rom_io.store = rom_io->store;
   mem_gpu_io.load = gpu_io->load;
   mem_gpu_io.store = gpu_io->store;
   mem_input_io.load = input_io->load;
   mem_input_io.store = input_io->store;
+  mem_timer_io.load = timer_io->load;
+  mem_timer_io.store = timer_io->store;
 }
 
 uint8_t mem_load(uint16_t addr){
@@ -58,6 +65,10 @@ uint8_t mem_load(uint16_t addr){
       val = mem_dma_control_reg;
     } else if (addr == ADDR_IO_JOYPAD) {
       val = mem_input_io.load(addr);
+    } else if (RANGE_INC(addr, ADDR_IO_DIV, ADDR_IO_TAC)) {
+      val = mem_timer_io.load(addr);
+    } else if (addr == ADDR_IF) {
+      val = interrupt_flags;
     }
   }else if(addr <= ADDR_HRAM_END){
     val = hram[addr - ADDR_HRAM_START];
@@ -97,6 +108,10 @@ void mem_store(uint16_t addr, uint8_t val){
       mem_dma_remaining_bytes = MEM_DMA_TRANSFER_NUM_BYTES;
     } else if (addr == ADDR_IO_JOYPAD) {
       mem_input_io.store(addr, val);
+    } else if (RANGE_INC(addr, ADDR_IO_DIV, ADDR_IO_TAC)) {
+      mem_timer_io.store(addr, val);
+    } else if (addr == ADDR_IF) {
+      interrupt_flags = val;
     }
   }else if(addr <= ADDR_HRAM_END){
     hram[addr - ADDR_HRAM_START] = val;

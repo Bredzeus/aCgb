@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "common.h"
 
 typedef enum {
   INPUT_DEVICE_KEYBOARD = 0,
@@ -23,6 +24,7 @@ typedef struct input_state_s {
   bool pause;
 } input_state_t;
 
+void input_init(mem_interface_t* mem_io);
 void input_enable_device(input_device_t device, bool enable);
 void input_set_device_state(input_device_t device, input_state_t* input);
 uint8_t input_load(uint16_t addr);
