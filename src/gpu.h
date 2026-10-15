@@ -26,6 +26,6 @@ void gpu_deinit(void);
 
 uint8_t gpu_read_reg(uint16_t addr);
 void gpu_write_reg(uint16_t addr, uint8_t val);
-void gpu_run(void);
+void gpu_run(uint8_t clocks);
 
 #endif // GPU_H_

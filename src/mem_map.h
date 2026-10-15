@@ -67,8 +67,6 @@
 
 #define ADDR_IE (0xFFFFU)
 #define ADDR_IF (0xFF0FU)
-// I/O registers
-#define ADDR_JOYPAD (0xFF00U)
 
 #define ADDR_SERIAL_START
 

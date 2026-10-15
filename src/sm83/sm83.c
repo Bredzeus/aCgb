@@ -148,7 +148,7 @@ void handle_halt(sm83_t* sm83) {
 
 void handle_stop(sm83_t* sm83) {
   // exits stop on controller input
-  uint8_t joypad = sm83->io.load(ADDR_JOYPAD);
+  uint8_t joypad = sm83->io.load(ADDR_IO_JOYPAD);
   if((joypad & 0x0F) != 0x0F){
     sm83->state = SM83_STATE_RUN;
   }
