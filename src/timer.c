@@ -88,25 +88,3 @@ void timer_run(uint8_t num_clocks) {
     }
   }
 }
-
-uint8_t* timer_reg_lookup(uint16_t addr) {
-  uint8_t* reg = NULL;
-  switch (addr) {
-    case ADDR_IO_DIV:
-      reg = &timer_divider;
-      break;
-    case ADDR_IO_TIMA:
-      reg = &timer_counter;
-      break;
-    case ADDR_IO_TMA:
-      reg = &timer_modulo;
-      break;
-    case ADDR_IO_TAC:
-      reg = &timer_control;
-      break;
-    default:
-      reg = NULL;
-      break;
-  }
-  return reg;
-}

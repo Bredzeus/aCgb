@@ -157,6 +157,7 @@ uint8_t gpu_read_reg(uint16_t addr) {
 }
 
 void gpu_write_reg(uint16_t addr, uint8_t val) {
+  // todo: lcd_y is read only
   uint8_t* reg_ptr = gpu_reg_lookup(addr);
   if (reg_ptr != NULL) {
     *reg_ptr = val;
