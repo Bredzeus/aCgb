@@ -9,6 +9,8 @@
 
 #define GB_MAIN_CLOCK_HZ (4194304U)
 #define GBC_MAIN_CLOCK_HZ (8388608U)
+#define GB_CLOCKS_PER_FRAME (70224U)
+#define TICKS_PER_FRAME (16U) // 16.666666666...
 
 #define INT_VBLANK (0U)
 #define INT_LCD (1U)

@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include "rom.h"
 #include "mbc.h"
 
@@ -21,7 +22,6 @@
 static bool rom_info_init(rom_info_t* rom_info);
 static mbc_type_t rom_map_type_to_mbc(uint32_t rom_type);
 
-#include <stdio.h>
 static bool rom_save_ram_byte(size_t pos, uint8_t val);
 static bool rom_init_ram(void);
 static bool rom_generate_ram_filepath(void);

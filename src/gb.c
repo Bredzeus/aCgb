@@ -31,14 +31,12 @@ typedef struct input_map_s {
 
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
-static uint64_t last_time = 0;
 
 static SDL_Surface *scr_surface = NULL;
 static SDL_Texture *screen = NULL;
 static size_t bytes_per_px = 0;
 
-static double fps_samples[10];
-static uint32_t pos = 0;
+static sm83_t sm83;
 
 static input_map_t keyboard_map = {
   SDL_SCANCODE_D,
@@ -78,24 +76,23 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 
   mem_init(&rom_io, &gpu_io, &input_io, &timer_io);
 
-  sm83_t sm83;
   sm83_init(&sm83, &mem_io);
   sm83_reset(&sm83);
 
   input_enable_device(INPUT_DEVICE_KEYBOARD, true);
   timer_init(&mem_io);
 
-  ////rom_load_from_file(ROM_FP);
-
-  sstr_t debug;
-  bool ok = sstr_init(&debug);
-  if (ok) {
-    sm83_to_sstr(&sm83, &debug);
-    sstr_print(&debug);
+  if (argc > 1) {
+    if (!rom_load_from_file(argv[1])) {
+      printf("Failed to load rom from file\n");
+      return SDL_APP_FAILURE;
+    }
+  } else {
+    printf("Invalid number of arguments, must provide rom filepath\n");
+    return SDL_APP_FAILURE;
   }
-  sstr_deinit(&debug);
 
-  last_time = SDL_GetTicks();
+  gpu_init(&mem_io, false, gb_draw);
 
   return SDL_APP_CONTINUE;
 }
@@ -110,13 +107,11 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
 
 SDL_AppResult SDL_AppIterate(void* appstate) {
   // once per frame update
-  clock_t time;
-  time = clock();
+  uint64_t start = SDL_GetTicks();
 
   if(!SDL_LockTextureToSurface(screen, NULL, &scr_surface)) {
     printf("Failed to lock screen texture\n");
   }
-
   input_state_t keyboard;
   gb_read_keyboard(&keyboard);
   input_set_device_state(INPUT_DEVICE_KEYBOARD, &keyboard);
@@ -131,46 +126,40 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     keyboard.button_start,
     keyboard.button_select);
 #endif // ACGB_SHOW_KB == 1
-  //mem_run_dma_controller();
-  //timer_run(1);
 
-  for (uint8_t x = 0; x < GPU_SCREEN_WIDTH; x++) {
-    for (uint8_t y = 0; y < GPU_SCREEN_HEIGHT; y++) {
-      uint16_t color = ((uint16_t)x << 8) | (uint16_t)y;
-      gb_draw(x, y, color);
-    }
+#if ACGB_DEBUG == 1
+
+#else
+  uint32_t t_cycles = 0;
+  while (t_cycles < GB_CLOCKS_PER_FRAME) {
+    uint32_t m_cycles = sm83_run(&sm83);
+    uint32_t new_t_cycles = (4 * m_cycles);
+    gpu_run(new_t_cycles);
+    mem_run_dma_controller(m_cycles);
+    timer_run(m_cycles);
+    t_cycles += new_t_cycles;
   }
 
-  SDL_UnlockTexture(screen);
+#endif // ACGB_DEBUG == 1
 
-  time = clock() - time;
+  SDL_UnlockTexture(screen);
 
   // Todo: render texture + present should be at the monitor refresh rate
   // not once per frame since it tanks fps
   SDL_RenderTexture(renderer, screen, NULL, NULL);
   SDL_RenderPresent(renderer);
 
-
-  // fps calc stuff
-  double t_diff = ((double)time) / CLOCKS_PER_SEC;
-  double pot_fps = 1 / t_diff;
-  fps_samples[pos] = pot_fps;
-  pos++;
-  pos %= 10;
-  double fps_avg = 0;
-  for (uint32_t i = 0; i < 10; i++) {
-    fps_avg += fps_samples[i];
+  uint64_t diff = SDL_GetTicks() - start;
+  if (diff < TICKS_PER_FRAME) {
+    SDL_Delay(TICKS_PER_FRAME - diff);
   }
-  fps_avg /= 10;
-#if ACGB_SHOW_FPS == 1
-  printf("delta_t total=%f, potential fps=%f\n", t_diff, pot_fps);
-  printf("avg fps=%f\n", fps_avg);
-#endif
 
   return SDL_APP_CONTINUE;
 }
 
 void SDL_AppQuit(void* appstate, SDL_AppResult result) {
+  gpu_deinit();
+  rom_cleanup();
   SDL_DestroyTexture(screen);
   SDL_DestroySurface(scr_surface);
   SDL_Quit();

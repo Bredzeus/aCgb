@@ -21,7 +21,7 @@
 #define ADDR_VRAM_TILEMAP1_START (0x9C00U)
 #define ADDR_VRAM_TILEMAP1_END (0x9FFFU)
 
-bool gpu_init(mem_interface_t* mem_interface, bool is_cgb);
+bool gpu_init(mem_interface_t* mem_interface, bool is_cgb, draw_f_t draw);
 void gpu_deinit(void);
 
 uint8_t gpu_read_reg(uint16_t addr);

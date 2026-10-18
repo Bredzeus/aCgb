@@ -72,9 +72,9 @@ void timer_reg_store(uint16_t addr, uint8_t val) {
   }
 }
 
-void timer_run(uint8_t num_clocks) {
-  timer_divider += num_clocks;
-  timer_num_clock += num_clocks;
+void timer_run(uint8_t m_cycles) {
+  timer_divider += m_cycles;
+  timer_num_clock += m_cycles;
   timer_clock_sel_t clock_sel = timer_control & TIMER_CONTROL_CLK_SEL_MASK;
   if (timer_num_clock >= timer_clock_sel_val[clock_sel]) {
     timer_num_clock = 0;

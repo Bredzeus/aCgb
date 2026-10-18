@@ -120,11 +120,13 @@ void mem_store(uint16_t addr, uint8_t val){
   }
 }
 
-void mem_run_dma_controller(void) {
-  if (mem_dma_remaining_bytes < 0) {
-    uint8_t offset = MEM_DMA_TRANSFER_NUM_BYTES - mem_dma_remaining_bytes;
-    uint8_t source_addr = ((uint16_t)mem_dma_control_reg << 8) | (uint16_t)offset;
-    oam[offset] = mem_load(source_addr);
-    mem_dma_remaining_bytes--;
+void mem_run_dma_controller(uint8_t m_cycles) {
+  for (uint8_t i = 0; i < m_cycles; i++) {
+    if (mem_dma_remaining_bytes < 0) {
+      uint8_t offset = MEM_DMA_TRANSFER_NUM_BYTES - mem_dma_remaining_bytes;
+      uint8_t source_addr = ((uint16_t)mem_dma_control_reg << 8) | (uint16_t)offset;
+      oam[offset] = mem_load(source_addr);
+      mem_dma_remaining_bytes--;
+    }
   }
 }

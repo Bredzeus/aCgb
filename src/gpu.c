@@ -125,7 +125,7 @@ static void gpu_transition_mode(gpu_mode_t mode);
 
 // Interface function implementations
 
-bool gpu_init(mem_interface_t* mem_interface, bool is_cgb) {
+bool gpu_init(mem_interface_t* mem_interface, bool is_cgb, draw_f_t draw) {
   gpu_io.load = mem_interface->load;
   gpu_io.store = mem_interface->store;
   gpu_is_cgb = is_cgb;
@@ -136,6 +136,7 @@ bool gpu_init(mem_interface_t* mem_interface, bool is_cgb) {
   } else {
     gpu_get_color = gpu_get_dmg_color;
   }
+  gpu_draw = draw;
   bool ok = cbuf_init(&gpu_bg_pixel_fifo, sizeof(gpu_pixel_t), GPU_PIXEL_BUF_SIZE);
   ok &= cbuf_init(&gpu_obj_pixel_fifo, sizeof(gpu_pixel_t), GPU_PIXEL_BUF_SIZE);
   gpu_transition_mode(GPU_MODE_OAM);
