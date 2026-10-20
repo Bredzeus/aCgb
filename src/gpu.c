@@ -35,13 +35,21 @@
 #define GPU_BYTES_PER_PALETTE (8U)
 #define GPU_BYTES_PER_COLOR (2U)
 #define GPU_BYTES_PER_TILE (16U)
-
+#define GPU_BYTES_PER_OBJ (4U)
 #define GPU_TILES_PER_MAP_DIM (32U)
+#define GPU_NUM_OBJ_PER_SCANLINE (10U)
 
 #define GPU_DMG_BG_COLOR_IDX_WHITE (GPU_COLOR_INDEX_0)
 #define GPU_DMG_BG_COLOR_IDX_LIGHT_GRAY (GPU_COLOR_INDEX_1)
 #define GPU_DMG_BG_COLOR_IDX_DARK_GRAY (GPU_COLOR_INDEX_2)
 #define GPU_DMG_BG_COLOR_IDX_BLACK (GPU_COLOR_INDEX_3)
+
+#define GPU_OAM_SCANLINE_NONE (-1)
+#define GPU_OBJ_DOT_WIDTH (8U)
+#define GPU_OBJ_DOT_HEIGHT_0 (8U)
+#define GPU_OBJ_DOT_HEIGHT_1 (16U)
+#define GPU_OBJ_Y_OFFSET (16U)
+#define GPU_OBJ_X_OFFSET (8U)
 
 typedef enum gpu_mode_s {
   GPU_MODE_HBLANK = 0U,
@@ -62,7 +70,6 @@ typedef enum gpu_color_index_s {
 typedef struct gpu_pixel_s {
   gpu_color_index_t color;
   uint8_t palette;
-  uint8_t obj_priority; // Not used on DMG only CGB
   uint8_t bg_priority;
 } gpu_pixel_t;
 
@@ -101,7 +108,9 @@ static cbuf_t gpu_obj_pixel_fifo;
 
 static bool gpu_is_cgb = false;
 static uint16_t gpu_px_x = 0;
-static uint16_t gpu_px_stall = 0;
+//static uint16_t gpu_screen_x = 0;
+static uint16_t gpu_total_stall = 0;
+static uint16_t gpu_curr_stall = 0;
 static uint8_t gpu_fetcher_px_x = 0;
 static uint8_t gpu_fetcher_px_y = 0;
 static bool gpu_window_y_cond = false;
@@ -112,6 +121,9 @@ static mem_interface_t gpu_io;
 static gpu_mode_t gpu_mode = GPU_MODE_OAM;
 static bool gpu_stat_int = false;
 
+static int8_t gpu_oam_scanline[GPU_SCREEN_WIDTH];
+static uint8_t gpu_num_oam_available = GPU_NUM_OBJ_PER_SCANLINE;
+
 // Local function declarations
 
 static uint8_t* gpu_reg_lookup(uint16_t addr);
@@ -120,8 +132,10 @@ static void gpu_render(void);
 static uint16_t gpu_get_cgb_color(gpu_pixel_t* bg_px, gpu_pixel_t* obj_px);
 static uint16_t gpu_get_dmg_color(gpu_pixel_t* bg_px, gpu_pixel_t* obj_px);
 static void gpu_fetch_bg_pixels(void);
+static void gpu_fetch_obj_pixels(void);
 static uint8_t gpu_byte_reverse(uint8_t in);
 static void gpu_transition_mode(gpu_mode_t mode);
+static void gpu_scan_oam(void);
 
 // Interface function implementations
 
@@ -132,7 +146,7 @@ bool gpu_init(mem_interface_t* mem_interface, bool is_cgb, draw_f_t draw) {
   // Color logic based on hardware
   if (is_cgb) {
     gpu_get_color = gpu_get_cgb_color;
-    memset(&gpu_cgb_bg_palettes, 0xFF, sizeof(gpu_cgb_bg_palettes) / sizeof(uint8_t));
+    memset(gpu_cgb_bg_palettes, 0xFF, sizeof(gpu_cgb_bg_palettes) / sizeof(uint8_t));
   } else {
     gpu_get_color = gpu_get_dmg_color;
   }
@@ -169,12 +183,21 @@ void gpu_run(uint8_t clocks) {
   for (uint8_t i = 0; i < clocks; i++) {
     switch (gpu_mode) {
       case GPU_MODE_OAM:
+        gpu_scan_oam();
         break;
       case GPU_MODE_DRAW:
-        if (cbuf_size(&gpu_bg_pixel_fifo) == 0) {
-          gpu_fetch_bg_pixels();
+        if (gpu_curr_stall > 0) {
+          gpu_curr_stall--;
+          gpu_total_stall++;
+        } else {
+          if (cbuf_size(&gpu_bg_pixel_fifo) == 0) {
+            gpu_fetch_bg_pixels();
+          }
+          if ((cbuf_size(&gpu_obj_pixel_fifo) == 0) && gpu_oam_scanline[gpu_px_x] != GPU_OAM_SCANLINE_NONE) {
+            gpu_fetch_obj_pixels();
+          }
+          gpu_render();
         }
-        gpu_render();
         break;
       case GPU_MODE_HBLANK:
       case GPU_MODE_VBLANK:
@@ -205,7 +228,7 @@ void gpu_run(uint8_t clocks) {
       next_mode = GPU_MODE_VBLANK;
     } else if (gpu_px_x <= GPU_DOT_DRAW_X_START) {
       next_mode = GPU_MODE_OAM;
-    } else if (gpu_px_x <= (GPU_DOT_HBLANK_START + gpu_px_stall)) {
+    } else if (gpu_px_x <= (GPU_DOT_HBLANK_START + gpu_total_stall)) {
       next_mode = GPU_MODE_DRAW;
     } else {
       next_mode = GPU_MODE_HBLANK;
@@ -426,7 +449,9 @@ void gpu_fetch_bg_pixels(void) {
     flip_x = GET_BIT(tile_attr, 5); // check X flip bit
     // todo: check bank bit
     px.palette = tile_attr & 0x03U;
-    px.bg_priority = tile_attr >> 7;
+    px.bg_priority = GET_BIT(tile_attr, 7U) ? 1U : 0U;
+  } else {
+    px.bg_priority = 0U;
   }
 
   uint8_t tile_data_low = 0xFF;
@@ -468,9 +493,81 @@ void gpu_transition_mode(gpu_mode_t mode) {
   gpu_mode = mode;
   gpu_lcd_status &= 0xFC;
   gpu_lcd_status |= (uint8_t)mode;
-  if (mode == GPU_MODE_VBLANK) {
-    uint8_t int_flags = gpu_io.load(ADDR_IF);
-    SET_BIT(int_flags, INT_VBLANK);
-    gpu_io.store(ADDR_IF, int_flags);
+  switch (mode) {
+    case GPU_MODE_VBLANK:
+      uint8_t int_flags = gpu_io.load(ADDR_IF);
+      SET_BIT(int_flags, INT_VBLANK);
+      gpu_io.store(ADDR_IF, int_flags);
+      break;
+    case GPU_MODE_OAM:
+      memset(gpu_oam_scanline, GPU_OAM_SCANLINE_NONE, GPU_SCREEN_WIDTH);
+      gpu_num_oam_available = GPU_NUM_OBJ_PER_SCANLINE;
+      break;
+    default:
+      break;
+  }
+}
+
+void gpu_scan_oam(void) {
+  // handle one obj per 2 clocks since oam scan is 80
+  // while there are 40 objs to scan
+  if (gpu_px_x % 2 != 0) {
+    return;
+  }
+  // check if already at max 10 objs 
+  if (gpu_num_oam_available == 0) {
+    return;
+  }
+  uint8_t obj_idx = gpu_px_x / 2;
+  uint16_t obj_addr = ADDR_OAM_START + (obj_idx * GPU_BYTES_PER_OBJ);
+  uint8_t obj_y = gpu_io.load(obj_addr);
+  uint8_t obj_x = gpu_io.load(obj_addr + 1);
+  // gross translation to screen coordinates
+  uint8_t real_y = MIN((obj_y - GPU_OBJ_Y_OFFSET), 0U);
+  uint8_t real_y_end = real_y + (GET_BIT(gpu_lcd_control, GPU_LCDC_OBJ_SIZE) ? MIN(obj_y, (GPU_OBJ_DOT_HEIGHT_1 - 1)) : MIN(obj_y, GPU_OBJ_DOT_HEIGHT_0 - 1));
+  if (!RANGE_INC(gpu_lcd_y, real_y, real_y_end)) {
+    return;
+  }
+  gpu_num_oam_available--;
+  uint8_t real_x = MIN((obj_x - GPU_OBJ_X_OFFSET), 0U);
+  uint8_t len_x = MIN(GPU_OBJ_DOT_WIDTH, obj_x);
+  for (uint8_t off_x = 0; off_x < len_x; off_x++) {
+    uint8_t x_pos = real_x + off_x;
+    if (gpu_oam_scanline[x_pos] == GPU_OAM_SCANLINE_NONE) {
+      // no obj here yet, simply set oam idx
+      gpu_oam_scanline[x_pos] = obj_idx;
+    } else {
+      // already an obj here, existing can only be overwritten if non-cgb mode
+      // and the new obj x is less than the old obj x
+      if (!gpu_is_cgb) {
+        uint16_t last_obj_addr = ADDR_OAM_START + (gpu_oam_scanline[x_pos] * GPU_BYTES_PER_OBJ);
+        uint8_t last_obj_x = gpu_io.load(last_obj_addr + 1);
+        if (obj_x < last_obj_x) {
+          gpu_oam_scanline[x_pos] = obj_idx;
+        }
+      }
+    }
+  }
+}
+
+void gpu_fetch_obj_pixels(void) {
+  for (uint8_t i = 0; i < 8U; i++) {
+    uint8_t obj_idx = gpu_oam_scanline[gpu_px_x];
+    if (obj_idx == GPU_OAM_SCANLINE_NONE) {
+      continue;
+    }
+    uint16_t obj_addr = ADDR_OAM_START + (obj_idx * GPU_BYTES_PER_OBJ);
+    uint8_t obj_y = gpu_io.load(obj_addr);
+    uint8_t obj_x = gpu_io.load(obj_addr + 1);
+    uint8_t obj_tile_idx = gpu_io.load(obj_addr + 2);
+    uint8_t obj_flags = gpu_io.load(obj_addr + 3);
+    gpu_pixel_t px;
+    if (gpu_is_cgb) {
+      px.palette = (obj_flags & 0x07U);
+    } else {
+      px.palette = (GET_BIT(obj_flags, 4U) ? 1U : 0U);
+    }
+    px.bg_priority = (GET_BIT(obj_flags, 7U) ? 1U : 0U);
+    // todo: get pixel color
   }
 }

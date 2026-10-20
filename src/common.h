@@ -28,6 +28,9 @@
 #define RANGE_INC(val, lower, upper) (((val) >= (lower)) && ((val) <= (upper)))
 #define RANGE_EXC(val, lower, upper) (((val) > (lower)) && ((val) < (upper)))
 
+#define MIN(a, b) ((a < b) ? a : b)
+#define MAX(a, b) ((a > b) ? a : b)
+
 typedef uint8_t (*mem_load_f_t)(uint16_t);
 typedef void (*mem_store_f_t)(uint16_t, uint8_t);
 typedef uint8_t (*rom_load_f_t)(size_t);
