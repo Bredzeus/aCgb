@@ -2,7 +2,8 @@
 
 #define MEM_DMA_TRANSFER_NUM_BYTES (160U)
 
-static uint8_t vram[VRAM_SIZE];
+static uint8_t vram_bank0[VRAM_SIZE];
+static uint8_t vram_bank1[VRAM_SIZE];
 static uint8_t wram0[WRAM0_SIZE];
 static uint8_t wram1[WRAM1_SIZE];
 static uint8_t lram[LRAM_SIZE];
@@ -13,6 +14,8 @@ static uint8_t interrupt_flags = 0; // 0xFF0F
 
 static uint8_t mem_dma_control_reg = 0; // 0xFF46
 static uint8_t mem_dma_remaining_bytes = 0;
+
+static uint8_t mem_vram_bank = 0; // 0xFF4F
 
 static mem_interface_t mem_rom_io = {0};
 static mem_interface_t mem_gpu_io = {0};
@@ -38,7 +41,11 @@ uint8_t mem_load(uint16_t addr){
   if(addr <= ADDR_ROM1_END){
     val = mem_rom_io.load(addr);
   }else if(addr <= ADDR_VRAM_END){
-    val = vram[addr - ADDR_VRAM_START];
+    if (GET_BIT(mem_vram_bank, 0U)) {
+      val = vram_bank1[addr - ADDR_VRAM_START];
+    } else {
+      val = vram_bank0[addr - ADDR_VRAM_START];
+    }
   }else if(addr <= ADDR_EXRAM_END){
     val = mem_rom_io.load(addr);
   }else if(addr <= ADDR_WRAM0_END){
@@ -69,6 +76,8 @@ uint8_t mem_load(uint16_t addr){
       val = mem_timer_io.load(addr);
     } else if (addr == ADDR_IF) {
       val = interrupt_flags;
+    } else if (addr == ADDR_IO_VRAM_BANK) {
+      val = mem_vram_bank;
     }
   }else if(addr <= ADDR_HRAM_END){
     val = hram[addr - ADDR_HRAM_START];
@@ -82,7 +91,11 @@ void mem_store(uint16_t addr, uint8_t val){
   if(addr <= ADDR_ROM1_END){
     mem_rom_io.store(addr, val);
   }else if(addr <= ADDR_VRAM_END){
-    vram[addr - ADDR_VRAM_START] = val;
+    if (GET_BIT(mem_vram_bank, 0U)) {
+      vram_bank1[addr - ADDR_VRAM_START] = val;
+    } else {
+      vram_bank0[addr - ADDR_VRAM_START] = val;
+    }
   }else if(addr <= ADDR_EXRAM_END){
     mem_rom_io.store(addr, val);
   }else if(addr <= ADDR_WRAM0_END){
@@ -112,6 +125,8 @@ void mem_store(uint16_t addr, uint8_t val){
       mem_timer_io.store(addr, val);
     } else if (addr == ADDR_IF) {
       interrupt_flags = val;
+    } else if (addr == ADDR_IO_VRAM_BANK) {
+      mem_vram_bank = val;
     }
   }else if(addr <= ADDR_HRAM_END){
     hram[addr - ADDR_HRAM_START] = val;

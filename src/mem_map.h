@@ -50,6 +50,7 @@
 #define ADDR_IO_TIMA (0xFF05U)
 #define ADDR_IO_TMA (0xFF06U)
 #define ADDR_IO_TAC (0xFF07U)
+#define ADDR_IO_VRAM_BANK (0xFF4FU)
 #define ADDR_GPU0_START (0xFF40U)
 #define ADDR_GPU0_END (0xFF4BU)
 #define ADDR_DMA (0xFF46U)

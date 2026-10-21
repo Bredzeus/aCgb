@@ -35,6 +35,7 @@
 #define GPU_BYTES_PER_PALETTE (8U)
 #define GPU_BYTES_PER_COLOR (2U)
 #define GPU_BYTES_PER_TILE (16U)
+#define GPU_BYTES_PER_TILE_SLICE (2U)
 #define GPU_BYTES_PER_OBJ (4U)
 #define GPU_TILES_PER_MAP_DIM (32U)
 #define GPU_NUM_OBJ_PER_SCANLINE (10U)
@@ -436,7 +437,7 @@ void gpu_fetch_bg_pixels(void) {
   uint8_t tile_idx = gpu_io.load(tile_addr);
 
   uint16_t tile_data_addr = 0;
-    if (GET_BIT(gpu_lcd_control, GPU_LCDC_BG_WIN_TILE_DATA)) {
+  if (GET_BIT(gpu_lcd_control, GPU_LCDC_BG_WIN_TILE_DATA)) {
     tile_data_addr = ADDR_VRAM_BLOCK0_START + (tile_idx * GPU_BYTES_PER_TILE) + (gpu_fetcher_px_y * 2);
   } else {
     tile_data_addr = (uint16_t)(ADDR_VRAM_BLOCK2_START + ((int16_t)tile_idx * GPU_BYTES_PER_TILE) + (gpu_fetcher_px_y * 2));
@@ -454,24 +455,19 @@ void gpu_fetch_bg_pixels(void) {
     px.bg_priority = 0U;
   }
 
-  uint8_t tile_data_low = 0xFF;
-  uint8_t tile_data_high = 0xFF;
   // todo: check that vram access isn't blocked
-  gpu_io.load(tile_data_addr);
-  gpu_io.load(tile_data_addr + 1);
-
-  if (cbuf_size(&gpu_bg_pixel_fifo) == 0) {
-    if (flip_x) {
-      tile_data_low = gpu_byte_reverse(tile_data_low);
-      tile_data_high = gpu_byte_reverse(tile_data_high);
-    }
-    for (uint8_t i = 0; i < 8; i++) {
-      // push to fifo, msb first
-      uint8_t color = (tile_data_low >> (7 - i)) & 0x01U;
-      color |= (tile_data_high >> (7 - i) & 0x01U) << 0x1U;
-      px.color = (gpu_color_index_t)color;
-      cbuf_write(&gpu_bg_pixel_fifo, &px);
-    }
+  uint8_t tile_data_low = gpu_io.load(tile_data_addr);
+  uint8_t tile_data_high = gpu_io.load(tile_data_addr + 1);
+  if (flip_x) {
+    tile_data_low = gpu_byte_reverse(tile_data_low);
+    tile_data_high = gpu_byte_reverse(tile_data_high);
+  }
+  for (uint8_t i = 0; i < 8; i++) {
+    // push to fifo, msb first
+    uint8_t color = (tile_data_low >> (7 - i)) & 0x01U;
+    color |= (tile_data_high >> (7 - i) & 0x01U) << 0x1U;
+    px.color = (gpu_color_index_t)color;
+    cbuf_write(&gpu_bg_pixel_fifo, &px);
   }
 }
 
@@ -550,9 +546,11 @@ void gpu_scan_oam(void) {
   }
 }
 
+// Todo: this can be cleaned up by storing more
+// info about an obj pixel calculated during oam scan
 void gpu_fetch_obj_pixels(void) {
   for (uint8_t i = 0; i < 8U; i++) {
-    uint8_t obj_idx = gpu_oam_scanline[gpu_px_x];
+    uint8_t obj_idx = gpu_oam_scanline[gpu_px_x + i];
     if (obj_idx == GPU_OAM_SCANLINE_NONE) {
       continue;
     }
@@ -562,12 +560,44 @@ void gpu_fetch_obj_pixels(void) {
     uint8_t obj_tile_idx = gpu_io.load(obj_addr + 2);
     uint8_t obj_flags = gpu_io.load(obj_addr + 3);
     gpu_pixel_t px;
+    uint8_t vram_bank = 0U;
     if (gpu_is_cgb) {
       px.palette = (obj_flags & 0x07U);
+      vram_bank = (GET_BIT(obj_flags, 3U) ? 1U : 0U);
     } else {
       px.palette = (GET_BIT(obj_flags, 4U) ? 1U : 0U);
     }
     px.bg_priority = (GET_BIT(obj_flags, 7U) ? 1U : 0U);
-    // todo: get pixel color
+    // stupid temporary bank switch, 
+    // I think real ppu has direct vram access to both banks
+    uint8_t current_bank = gpu_io.load(ADDR_IO_VRAM_BANK);
+    gpu_io.store(ADDR_IO_VRAM_BANK, vram_bank);
+    bool flip_x = GET_BIT(obj_flags, 5U);
+    bool flip_y = GET_BIT(obj_flags, 6U);
+    // this is cool
+    uint8_t tiles_per_obj = GET_BIT(gpu_lcd_control, GPU_LCDC_OBJ_SIZE) ? 2U : 1U;
+    uint8_t obj_real_y = MIN((obj_y - GPU_OBJ_Y_OFFSET), 0U);
+    uint8_t obj_y_offset = gpu_lcd_y - obj_real_y;
+    if (flip_y) {
+      uint8_t obj_y_relative_end = (GET_BIT(gpu_lcd_control, GPU_LCDC_OBJ_SIZE) ? (GPU_OBJ_DOT_HEIGHT_1 - 1) : (GPU_OBJ_DOT_HEIGHT_0 - 1));
+      obj_y_offset = obj_y_relative_end - obj_y_offset;
+    }
+    uint8_t tile_addr = ADDR_VRAM_START 
+                        + (obj_tile_idx * GPU_BYTES_PER_TILE * tiles_per_obj)
+                        + (obj_y_offset * GPU_BYTES_PER_TILE_SLICE);
+    uint8_t tile_data_low = gpu_io.load(tile_addr);
+    uint8_t tile_data_high = gpu_io.load(tile_addr + 1);
+    if (flip_x) {
+      tile_data_low = gpu_byte_reverse(tile_data_low);
+      tile_data_high = gpu_byte_reverse(tile_data_high);
+    }
+    uint8_t obj_real_x = MIN((obj_x - GPU_OBJ_X_OFFSET), 0U);
+    uint8_t obj_x_offset = gpu_px_x + i - obj_real_x;
+    uint8_t color = (tile_data_low >> (7U - obj_x_offset)) & 0x01U;
+    color |= (tile_data_high >> (7U >> obj_x_offset) & 0x01U) << 0x1U;
+    px.color = (gpu_color_index_t)color;
+    cbuf_write(&gpu_obj_pixel_fifo, &px);
+    // restore previously set vram bank
+    gpu_io.store(ADDR_IO_VRAM_BANK, current_bank);
   }
 }
