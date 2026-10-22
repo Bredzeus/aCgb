@@ -78,26 +78,6 @@ void sm83_init(sm83_t* sm83, mem_interface_t* mem_interface){
   sm83->io.store = mem_interface->store;
 }
 
-void sm83_reset(sm83_t* sm83) {
-  // TODO implement version dependent boot rom
-  // For now, init is based on AGB
-  sm83->reg_file.pc = 0x0100;
-  sm83->reg_file.sp = 0xfffe;
-  sm83->reg_file.a = 0x11;
-  sm83->reg_file.f = 0x00;
-  sm83->reg_file.b = 0x01;
-  sm83->reg_file.c = 0x00;
-  sm83->reg_file.d = 0xff;
-  sm83->reg_file.e = 0x56;
-  sm83->reg_file.h = 0x00;
-  sm83->reg_file.l = 0x0d;
-  sm83->reg_file.ir = 0;
-  sm83->reg_file.ie = 0;
-
-  sm83->state = SM83_STATE_RUN;
-  sm83->ime = false;
-}
-
 uint32_t sm83_run(sm83_t* sm83) {
   sm83->cycles = 0;
   switch(sm83->state) {

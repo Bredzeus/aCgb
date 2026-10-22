@@ -43,12 +43,6 @@ typedef struct sm83_s {
 void sm83_init(sm83_t* sm83, mem_interface_t* mem_interface);
 
 /*
-* resets the cpu
-* sm83 - (sm83_t*) cpu state struct
-*/
-void sm83_reset(sm83_t* sm83);
-
-/*
 * executes one instruction
 * sm83 - (sm83_t*) cpu state struct
 * returns: (uint32_t) number of cycles passed

@@ -15,6 +15,13 @@
 #include <SDL3/SDL_main.h>
 
 #define GB_WINDOW_SCALE (3U)
+#define GB_DEBUG_ARG ("--debug")
+
+typedef enum gb_state_s {
+  GB_STATE_PAUSE,
+  GB_STATE_RUN,
+  NUM_GB_STATES
+} gb_state_t;
 
 typedef struct input_map_s {
   SDL_Scancode button_right;
@@ -36,7 +43,8 @@ static SDL_Surface *scr_surface = NULL;
 static SDL_Texture *screen = NULL;
 static size_t bytes_per_px = 0;
 
-static sm83_t sm83;
+static sm83_t gb_sm83;
+static gb_state_t gb_state;
 
 static input_map_t keyboard_map = {
   SDL_SCANCODE_D,
@@ -55,6 +63,15 @@ static void gb_draw(uint8_t x, uint8_t y, uint16_t color);
 static bool init_renderer(void);
 
 static void gb_read_keyboard(input_state_t* keyboard_state);
+static void gb_handle_debug_commands(void);
+static void gb_run(void);
+
+static void gb_debug_dump_memory(uint16_t addr, uint32_t num_bytes);
+static void gb_debug_run(uint32_t num_instr);
+static void gb_dump_sm83(void);
+
+static void gb_reset_sm83_dmg(sm83_t* sm83, uint8_t checksum);
+static void gb_reset_sm83_cgb(sm83_t* sm83);
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
   SDL_SetAppMetadata(ACGB_NAME, ACGB_VERSION, "");
@@ -76,23 +93,38 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 
   mem_init(&rom_io, &gpu_io, &input_io, &timer_io);
 
-  sm83_init(&sm83, &mem_io);
-  sm83_reset(&sm83);
+  sm83_init(&gb_sm83, &mem_io);
 
   input_enable_device(INPUT_DEVICE_KEYBOARD, true);
   timer_init(&mem_io);
 
-  if (argc > 1) {
-    if (!rom_load_from_file(argv[1])) {
-      printf("Failed to load rom from file\n");
-      return SDL_APP_FAILURE;
+  bool rom_arg = false;
+  gb_state = GB_STATE_RUN;
+  for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], GB_DEBUG_ARG) == 0) {
+      gb_state = GB_STATE_PAUSE;
+    } else {
+      rom_arg = true;
+      if (!rom_load_from_file(argv[i])) {
+        printf("Failed to load rom from file\n");
+        return SDL_APP_FAILURE;
+      }
     }
-  } else {
+  }
+  if (!rom_arg) {
     printf("Invalid number of arguments, must provide rom filepath\n");
     return SDL_APP_FAILURE;
   }
 
   gpu_init(&mem_io, false, gb_draw);
+
+  rom_info_t rom_info;
+  rom_get_info(&rom_info);
+  if (GET_BIT(rom_info.cgb_flag, 7U)) {
+    gb_reset_sm83_cgb(&gb_sm83);
+  } else {
+    gb_reset_sm83_dmg(&gb_sm83, rom_info.header_checksum);
+  }
 
   return SDL_APP_CONTINUE;
 }
@@ -109,45 +141,11 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   // once per frame update
   uint64_t start = SDL_GetTicks();
 
-  if(!SDL_LockTextureToSurface(screen, NULL, &scr_surface)) {
-    printf("Failed to lock screen texture\n");
+  if (gb_state == GB_STATE_PAUSE) {
+    gb_handle_debug_commands();
+  } else if (gb_state == GB_STATE_RUN) {
+    gb_run();
   }
-  input_state_t keyboard;
-  gb_read_keyboard(&keyboard);
-  input_set_device_state(INPUT_DEVICE_KEYBOARD, &keyboard);
-#if ACGB_SHOW_KB == 1
-  printf("%u%u%u%u %u%u%u%u\n", 
-    keyboard.button_left,
-    keyboard.button_right,
-    keyboard.button_up,
-    keyboard.button_down,
-    keyboard.button_A,
-    keyboard.button_B,
-    keyboard.button_start,
-    keyboard.button_select);
-#endif // ACGB_SHOW_KB == 1
-
-#if ACGB_DEBUG == 1
-
-#else
-  uint32_t t_cycles = 0;
-  while (t_cycles < GB_CLOCKS_PER_FRAME) {
-    uint32_t m_cycles = sm83_run(&sm83);
-    uint32_t new_t_cycles = (4 * m_cycles);
-    gpu_run(new_t_cycles);
-    mem_run_dma_controller(m_cycles);
-    timer_run(m_cycles);
-    t_cycles += new_t_cycles;
-  }
-
-#endif // ACGB_DEBUG == 1
-
-  SDL_UnlockTexture(screen);
-
-  // Todo: render texture + present should be at the monitor refresh rate
-  // not once per frame since it tanks fps
-  SDL_RenderTexture(renderer, screen, NULL, NULL);
-  SDL_RenderPresent(renderer);
 
   uint64_t diff = SDL_GetTicks() - start;
   if (diff < TICKS_PER_FRAME) {
@@ -212,4 +210,121 @@ void gb_read_keyboard(input_state_t* keyboard_state) {
   keyboard_state->button_start = key_states[keyboard_map.button_start];
   keyboard_state->speedup = key_states[keyboard_map.speedup];
   keyboard_state->pause = key_states[keyboard_map.pause];
+}
+
+void gb_handle_debug_commands(void) {
+  #define DEBUG_INPUT_SIZE (100U)
+  char input_buffer[DEBUG_INPUT_SIZE];
+  fgets(input_buffer, sizeof(input_buffer), stdin);
+  char* token = strtok(input_buffer, " ");
+  //todo: finish command parsing
+}
+
+void gb_run(void) {
+  if(!SDL_LockTextureToSurface(screen, NULL, &scr_surface)) {
+    printf("Failed to lock screen texture\n");
+  }
+  input_state_t keyboard;
+  gb_read_keyboard(&keyboard);
+  input_set_device_state(INPUT_DEVICE_KEYBOARD, &keyboard);
+  if (keyboard.pause) {
+    gb_state = GB_STATE_PAUSE;
+  }
+#if ACGB_SHOW_KB == 1
+  printf("%u%u%u%u %u%u%u%u\n", 
+    keyboard.button_left,
+    keyboard.button_right,
+    keyboard.button_up,
+    keyboard.button_down,
+    keyboard.button_A,
+    keyboard.button_B,
+    keyboard.button_start,
+    keyboard.button_select);
+#endif // ACGB_SHOW_KB == 1
+
+  uint32_t t_cycles = 0;
+  while (t_cycles < GB_CLOCKS_PER_FRAME) {
+    uint32_t m_cycles = sm83_run(&gb_sm83);
+    uint32_t new_t_cycles = (4 * m_cycles);
+    gpu_run(new_t_cycles);
+    mem_run_dma_controller(m_cycles);
+    timer_run(m_cycles);
+    t_cycles += new_t_cycles;
+  }
+
+  SDL_UnlockTexture(screen);
+
+  // Todo: render texture + present should be at the monitor refresh rate
+  // not once per frame since it tanks fps
+  SDL_RenderTexture(renderer, screen, NULL, NULL);
+  SDL_RenderPresent(renderer);
+}
+
+void gb_debug_dump_memory(uint16_t addr, uint32_t num_bytes) {
+  const uint32_t bytes_per_line = 8U;
+  for (uint32_t i = 0; i < num_bytes; i++) {
+    if (i % bytes_per_line == 0U) {
+      printf("\n0x%04x:", addr + i);
+    }
+    printf(" %02x", mem_load(addr + i));
+  }
+}
+
+void gb_debug_run(uint32_t num_instr) {
+  if (num_instr == 0) {
+    gb_state = GB_STATE_RUN;
+  }
+  for (uint32_t i = 0; i < num_instr; i++) {
+    gb_run();
+  }
+}
+
+void gb_dump_sm83(void) {
+  sstr_t sm83_dump;
+  bool ok = sstr_init(&sm83_dump);
+  if (ok) {
+    sm83_to_sstr(&gb_sm83, &sm83_dump);
+    sstr_print(&sm83_dump);
+  }
+  sstr_deinit(&sm83_dump);
+}
+
+void gb_reset_sm83_dmg(sm83_t* sm83, uint8_t checksum) {
+  sm83->reg_file.pc = 0x0100;
+  sm83->reg_file.sp = 0xfffe;
+  sm83->reg_file.a = 0x01;
+  if (checksum == 0x00U) {
+    sm83->reg_file.f = 0x80;
+  } else {
+    sm83->reg_file.f = 0xb0;
+  }
+  sm83->reg_file.b = 0x00;
+  sm83->reg_file.c = 0x13;
+  sm83->reg_file.d = 0x00;
+  sm83->reg_file.e = 0xd8;
+  sm83->reg_file.h = 0x01;
+  sm83->reg_file.l = 0x4d;
+  sm83->reg_file.ir = 0;
+  sm83->reg_file.ie = 0;
+
+  sm83->state = SM83_STATE_RUN;
+  sm83->ime = false;
+}
+
+void gb_reset_sm83_cgb(sm83_t* sm83) {
+  sm83->reg_file.pc = 0x0100;
+  sm83->reg_file.sp = 0xfffe;
+  sm83->reg_file.a = 0x11;
+  sm83->reg_file.f = 0x80;
+  sm83->reg_file.b = 0x00;
+  sm83->reg_file.c = 0x00;
+  sm83->reg_file.d = 0xff;
+  sm83->reg_file.e = 0x56;
+  sm83->reg_file.h = 0x00;
+  sm83->reg_file.l = 0x0d;
+  sm83->reg_file.ir = 0;
+  sm83->reg_file.ie = 0;
+
+  sm83->state = SM83_STATE_RUN;
+  sm83->ime = false;
 }
