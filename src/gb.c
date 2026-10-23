@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 #include "common.h"
@@ -36,6 +37,14 @@ typedef struct input_map_s {
   SDL_Scancode pause;
 } input_map_t;
 
+typedef enum debug_command_s {
+  DEBUG_COMMAND_RAM = 0,
+  DEBUG_COMMAND_SM83,
+  DEBUG_COMMAND_RUN,
+  DEBUG_COMMAND_EXIT,
+  NUM_DEBUG_COMMANDS
+} debug_command_t;
+
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
 
@@ -56,8 +65,10 @@ static input_map_t keyboard_map = {
   SDL_SCANCODE_M,
   SDL_SCANCODE_N,
   SDL_SCANCODE_UNKNOWN,
-  SDL_SCANCODE_UNKNOWN
+  SDL_SCANCODE_P
 };
+
+static SDL_AppResult app_result = SDL_APP_CONTINUE;
 
 static void gb_draw(uint8_t x, uint8_t y, uint16_t color);
 static bool init_renderer(void);
@@ -152,7 +163,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     SDL_Delay(TICKS_PER_FRAME - diff);
   }
 
-  return SDL_APP_CONTINUE;
+  return app_result;
 }
 
 void SDL_AppQuit(void* appstate, SDL_AppResult result) {
@@ -210,14 +221,63 @@ void gb_read_keyboard(input_state_t* keyboard_state) {
   keyboard_state->button_start = key_states[keyboard_map.button_start];
   keyboard_state->speedup = key_states[keyboard_map.speedup];
   keyboard_state->pause = key_states[keyboard_map.pause];
+#if ACGB_SHOW_KB == 1
+  printf("%u%u%u%u %u%u%u%u %u%u\n", 
+    keyboard_state->button_left,
+    keyboard_state->button_right,
+    keyboard_state->button_up,
+    keyboard_state->button_down,
+    keyboard_state->button_A,
+    keyboard_state->button_B,
+    keyboard_state->button_start,
+    keyboard_state->button_select,
+    keyboard_state->speedup,
+    keyboard_state->pause);
+#endif // ACGB_SHOW_KB == 1
 }
 
 void gb_handle_debug_commands(void) {
   #define DEBUG_INPUT_SIZE (100U)
   char input_buffer[DEBUG_INPUT_SIZE];
+  printf("Enter command: ");
   fgets(input_buffer, sizeof(input_buffer), stdin);
+  debug_command_t debug_command = NUM_DEBUG_COMMANDS;
+  uint32_t arg_idx = 0;
+  uint32_t args[2];
   char* token = strtok(input_buffer, " ");
-  //todo: finish command parsing
+  while (token != NULL && arg_idx < 3U) {
+    if (arg_idx == 0) {
+      if (strncmp(token, "ram", 3U) == 0) {
+        debug_command = DEBUG_COMMAND_RAM;
+      } else if (strncmp(token, "sm83", 4U) == 0) {
+        debug_command = DEBUG_COMMAND_SM83;
+      } else if (strncmp(token, "run", 3U) == 0) {
+        debug_command = DEBUG_COMMAND_RUN;
+      } else if (strncmp(token, "exit", 4U) == 0) {
+        debug_command = DEBUG_COMMAND_EXIT;
+      }
+    } else {
+      args[arg_idx - 1] = strtoul(token, NULL, 10);
+    }
+    arg_idx++;
+    token = strtok(NULL, " ");
+  }
+  switch (debug_command) {
+    case DEBUG_COMMAND_RAM:
+      gb_debug_dump_memory(args[0], args[1]);
+      break;
+    case DEBUG_COMMAND_SM83:
+      gb_dump_sm83();
+      break;
+    case DEBUG_COMMAND_RUN:
+      gb_debug_run(args[0]);
+      break;
+    case DEBUG_COMMAND_EXIT:
+      app_result = SDL_APP_SUCCESS;
+      break;
+    default:
+      break;
+  }
 }
 
 void gb_run(void) {
@@ -228,20 +288,9 @@ void gb_run(void) {
   gb_read_keyboard(&keyboard);
   input_set_device_state(INPUT_DEVICE_KEYBOARD, &keyboard);
   if (keyboard.pause) {
+    printf("pausing and entering debug mode\n");
     gb_state = GB_STATE_PAUSE;
   }
-#if ACGB_SHOW_KB == 1
-  printf("%u%u%u%u %u%u%u%u\n", 
-    keyboard.button_left,
-    keyboard.button_right,
-    keyboard.button_up,
-    keyboard.button_down,
-    keyboard.button_A,
-    keyboard.button_B,
-    keyboard.button_start,
-    keyboard.button_select);
-#endif // ACGB_SHOW_KB == 1
-
   uint32_t t_cycles = 0;
   while (t_cycles < GB_CLOCKS_PER_FRAME) {
     uint32_t m_cycles = sm83_run(&gb_sm83);
@@ -268,11 +317,15 @@ void gb_debug_dump_memory(uint16_t addr, uint32_t num_bytes) {
     }
     printf(" %02x", mem_load(addr + i));
   }
+  printf("\n");
 }
 
 void gb_debug_run(uint32_t num_instr) {
   if (num_instr == 0) {
+    // Todo: unpausing breaks keyboard input
+    // probably cause input handling is done directly rather than through sdl
     gb_state = GB_STATE_RUN;
+    printf("unpausing and exiting debug mode\n");
   }
   for (uint32_t i = 0; i < num_instr; i++) {
     gb_run();
