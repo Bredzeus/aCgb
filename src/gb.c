@@ -42,6 +42,7 @@ typedef enum debug_command_s {
   DEBUG_COMMAND_SM83,
   DEBUG_COMMAND_RUN,
   DEBUG_COMMAND_EXIT,
+  DEBUG_COMMAND_BREAK,
   NUM_DEBUG_COMMANDS
 } debug_command_t;
 
@@ -69,6 +70,10 @@ static input_map_t keyboard_map = {
 };
 
 static SDL_AppResult app_result = SDL_APP_CONTINUE;
+static bool breakpoint_en = false;
+static bool breakpoint_reset = false;
+static uint16_t breakpoint_addr = 0x0000U;
+static uint64_t gb_instr_count = 0U;
 
 static void gb_draw(uint8_t x, uint8_t y, uint16_t color);
 static bool init_renderer(void);
@@ -80,6 +85,7 @@ static void gb_run(uint32_t t_cycles);
 static void gb_debug_dump_memory(uint16_t addr, uint32_t num_bytes);
 static void gb_debug_run(uint32_t num_instr);
 static void gb_dump_sm83(void);
+static void gb_breakpoint(bool en, uint16_t addr);
 
 static void gb_reset_sm83_dmg(sm83_t* sm83, uint8_t checksum);
 static void gb_reset_sm83_cgb(sm83_t* sm83);
@@ -239,6 +245,7 @@ void gb_read_keyboard(input_state_t* keyboard_state) {
 void gb_handle_debug_commands(void) {
   #define DEBUG_INPUT_SIZE (100U)
   char input_buffer[DEBUG_INPUT_SIZE];
+  printf("Instruction count: %lu\n", gb_instr_count);
   printf("Enter command: ");
   fgets(input_buffer, sizeof(input_buffer), stdin);
   debug_command_t debug_command = NUM_DEBUG_COMMANDS;
@@ -255,6 +262,8 @@ void gb_handle_debug_commands(void) {
         debug_command = DEBUG_COMMAND_RUN;
       } else if (strncmp(token, "exit", 4U) == 0) {
         debug_command = DEBUG_COMMAND_EXIT;
+      } else if (strncmp(token, "break", 5U) == 0) {
+        debug_command = DEBUG_COMMAND_BREAK;
       }
     } else {
       args[arg_idx - 1] = strtoul(token, NULL, 10);
@@ -275,6 +284,9 @@ void gb_handle_debug_commands(void) {
     case DEBUG_COMMAND_EXIT:
       app_result = SDL_APP_SUCCESS;
       break;
+    case DEBUG_COMMAND_BREAK:
+      gb_breakpoint(args[0], args[1]);
+      break;
     default:
       break;
   }
@@ -291,14 +303,23 @@ void gb_run(uint32_t t_cycles) {
     printf("pausing and entering debug mode\n");
     gb_state = GB_STATE_PAUSE;
   }
-  for (uint32_t i = 0; i < t_cycles; i++) {
+  uint32_t cycle = 0U;
+  while (cycle < t_cycles) {
+    if (breakpoint_en && !breakpoint_reset && gb_sm83.reg_file.pc == breakpoint_addr) {
+      printf("breakpoint hit\n");
+      gb_state = GB_STATE_PAUSE;
+      breakpoint_reset = true;
+      break;
+    }
+    breakpoint_reset = false;
     uint32_t m_cycles = sm83_run(&gb_sm83);
+    gb_instr_count++;
     uint32_t new_t_cycles = (4 * m_cycles);
     gpu_run(new_t_cycles);
     mem_run_dma_controller(m_cycles);
     timer_run(m_cycles);
+    cycle += new_t_cycles;
   }
-
   SDL_UnlockTexture(screen);
 
   // Todo: render texture + present should be at the monitor refresh rate
@@ -337,6 +358,12 @@ void gb_dump_sm83(void) {
     sstr_print(&sm83_dump);
   }
   sstr_deinit(&sm83_dump);
+}
+
+void gb_breakpoint(bool en, uint16_t addr) {
+  breakpoint_en = en;
+  breakpoint_addr = addr;
+  breakpoint_reset = false;
 }
 
 void gb_reset_sm83_dmg(sm83_t* sm83, uint8_t checksum) {
