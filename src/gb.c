@@ -46,6 +46,12 @@ typedef enum debug_command_s {
   NUM_DEBUG_COMMANDS
 } debug_command_t;
 
+typedef struct breakpoint_s {
+  uint16_t addr;
+  bool trigger;
+  breakpoint_s* next;
+} breakpoint_t;
+
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
 
@@ -70,6 +76,7 @@ static input_map_t keyboard_map = {
 };
 
 static SDL_AppResult app_result = SDL_APP_CONTINUE;
+static breakpoint_t* breakpoints;
 static bool breakpoint_en = false;
 static bool breakpoint_reset = false;
 static uint16_t breakpoint_addr = 0x0000U;
@@ -305,6 +312,7 @@ void gb_run(uint32_t t_cycles) {
   }
   uint32_t cycle = 0U;
   while (cycle < t_cycles) {
+    for ()
     if (breakpoint_en && !breakpoint_reset && gb_sm83.reg_file.pc == breakpoint_addr) {
       printf("breakpoint hit\n");
       gb_state = GB_STATE_PAUSE;
@@ -361,6 +369,7 @@ void gb_dump_sm83(void) {
 }
 
 void gb_breakpoint(bool en, uint16_t addr) {
+  breakpoint_t* bp = breakpoints;
   breakpoint_en = en;
   breakpoint_addr = addr;
   breakpoint_reset = false;
