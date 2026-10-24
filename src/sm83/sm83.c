@@ -549,6 +549,32 @@ void handle_run(sm83_t* sm83) {
     sm83->cycles += 2;
     break;
   }
+  case SM83_INSTR_DEC_BC: {
+    uint16_t bc = combine(sm83->reg_file.b, sm83->reg_file.c);
+    bc--;
+    separate(bc, &sm83->reg_file.b, &sm83->reg_file.c);
+    sm83->cycles += 2;
+    break;
+  }
+  case SM83_INSTR_DEC_DE: {
+    uint16_t de = combine(sm83->reg_file.d, sm83->reg_file.e);
+    de--;
+    separate(de, &sm83->reg_file.d, &sm83->reg_file.e);
+    sm83->cycles += 2;
+    break;
+  }
+  case SM83_INSTR_DEC_HL: {
+    uint16_t hl = combine(sm83->reg_file.h, sm83->reg_file.l);
+    hl--;
+    separate(hl, &sm83->reg_file.h, &sm83->reg_file.l);
+    sm83->cycles += 2;
+    break;
+  }
+  case SM83_INSTR_DEC_SP: {
+    sm83->reg_file.sp--;
+    sm83->cycles += 2;
+    break;
+  }
   case SM83_INSTR_ADD_HL_BC: {
     uint16_t hl = combine(sm83->reg_file.h, sm83->reg_file.l);
     uint16_t bc = combine(sm83->reg_file.b, sm83->reg_file.c);

@@ -75,7 +75,7 @@ static bool init_renderer(void);
 
 static void gb_read_keyboard(input_state_t* keyboard_state);
 static void gb_handle_debug_commands(void);
-static void gb_run(void);
+static void gb_run(uint32_t t_cycles);
 
 static void gb_debug_dump_memory(uint16_t addr, uint32_t num_bytes);
 static void gb_debug_run(uint32_t num_instr);
@@ -155,7 +155,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   if (gb_state == GB_STATE_PAUSE) {
     gb_handle_debug_commands();
   } else if (gb_state == GB_STATE_RUN) {
-    gb_run();
+    gb_run(GB_CLOCKS_PER_FRAME);
   }
 
   uint64_t diff = SDL_GetTicks() - start;
@@ -280,7 +280,7 @@ void gb_handle_debug_commands(void) {
   }
 }
 
-void gb_run(void) {
+void gb_run(uint32_t t_cycles) {
   if(!SDL_LockTextureToSurface(screen, NULL, &scr_surface)) {
     printf("Failed to lock screen texture\n");
   }
@@ -291,14 +291,12 @@ void gb_run(void) {
     printf("pausing and entering debug mode\n");
     gb_state = GB_STATE_PAUSE;
   }
-  uint32_t t_cycles = 0;
-  while (t_cycles < GB_CLOCKS_PER_FRAME) {
+  for (uint32_t i = 0; i < t_cycles; i++) {
     uint32_t m_cycles = sm83_run(&gb_sm83);
     uint32_t new_t_cycles = (4 * m_cycles);
     gpu_run(new_t_cycles);
     mem_run_dma_controller(m_cycles);
     timer_run(m_cycles);
-    t_cycles += new_t_cycles;
   }
 
   SDL_UnlockTexture(screen);
@@ -326,9 +324,8 @@ void gb_debug_run(uint32_t num_instr) {
     // probably cause input handling is done directly rather than through sdl
     gb_state = GB_STATE_RUN;
     printf("unpausing and exiting debug mode\n");
-  }
-  for (uint32_t i = 0; i < num_instr; i++) {
-    gb_run();
+  } else {
+    gb_run(num_instr);
   }
 }
 
