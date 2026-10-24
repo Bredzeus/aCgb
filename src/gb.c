@@ -73,7 +73,7 @@ static SDL_AppResult app_result = SDL_APP_CONTINUE;
 static bool breakpoint_en = false;
 static bool breakpoint_reset = false;
 static uint16_t breakpoint_addr = 0x0000U;
-static uint64_t gb_instr_count = 0U;
+static uint64_t gb_cycle_count = 0U;
 
 static void gb_draw(uint8_t x, uint8_t y, uint16_t color);
 static bool init_renderer(void);
@@ -83,7 +83,7 @@ static void gb_handle_debug_commands(void);
 static void gb_run(uint32_t t_cycles);
 
 static void gb_debug_dump_memory(uint16_t addr, uint32_t num_bytes);
-static void gb_debug_run(uint32_t num_instr);
+static void gb_debug_run(uint32_t num_clocks);
 static void gb_dump_sm83(void);
 static void gb_breakpoint(bool en, uint16_t addr);
 
@@ -245,7 +245,7 @@ void gb_read_keyboard(input_state_t* keyboard_state) {
 void gb_handle_debug_commands(void) {
   #define DEBUG_INPUT_SIZE (100U)
   char input_buffer[DEBUG_INPUT_SIZE];
-  printf("Instruction count: %lu\n", gb_instr_count);
+  printf("Instruction count: %lu\n", gb_cycle_count);
   printf("Enter command: ");
   fgets(input_buffer, sizeof(input_buffer), stdin);
   debug_command_t debug_command = NUM_DEBUG_COMMANDS;
@@ -313,12 +313,12 @@ void gb_run(uint32_t t_cycles) {
     }
     breakpoint_reset = false;
     uint32_t m_cycles = sm83_run(&gb_sm83);
-    gb_instr_count++;
     uint32_t new_t_cycles = (4 * m_cycles);
     gpu_run(new_t_cycles);
     mem_run_dma_controller(m_cycles);
     timer_run(m_cycles);
     cycle += new_t_cycles;
+    gb_cycle_count += new_t_cycles;
   }
   SDL_UnlockTexture(screen);
 
@@ -339,14 +339,14 @@ void gb_debug_dump_memory(uint16_t addr, uint32_t num_bytes) {
   printf("\n");
 }
 
-void gb_debug_run(uint32_t num_instr) {
-  if (num_instr == 0) {
+void gb_debug_run(uint32_t num_clocks) {
+  if (num_clocks == 0) {
     // Todo: unpausing breaks keyboard input
     // probably cause input handling is done directly rather than through sdl
     gb_state = GB_STATE_RUN;
     printf("unpausing and exiting debug mode\n");
   } else {
-    gb_run(num_instr);
+    gb_run(num_clocks);
   }
 }
 
