@@ -49,7 +49,7 @@ typedef enum debug_command_s {
 typedef struct breakpoint_s {
   uint16_t addr;
   bool trigger;
-  breakpoint_s* next;
+  struct breakpoint_s* next;
 } breakpoint_t;
 
 static SDL_Window *window = NULL;
@@ -77,9 +77,6 @@ static input_map_t keyboard_map = {
 
 static SDL_AppResult app_result = SDL_APP_CONTINUE;
 static breakpoint_t* breakpoints;
-static bool breakpoint_en = false;
-static bool breakpoint_reset = false;
-static uint16_t breakpoint_addr = 0x0000U;
 static uint64_t gb_cycle_count = 0U;
 
 static void gb_draw(uint8_t x, uint8_t y, uint16_t color);
@@ -180,6 +177,13 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 }
 
 void SDL_AppQuit(void* appstate, SDL_AppResult result) {
+  breakpoint_t* bp = breakpoints;
+  breakpoint_t* bp_next = NULL;
+  while (bp != NULL) {
+    bp_next = bp->next;
+    free(bp);
+    bp = bp_next;
+  }
   gpu_deinit();
   rom_cleanup();
   SDL_DestroyTexture(screen);
@@ -312,14 +316,23 @@ void gb_run(uint32_t t_cycles) {
   }
   uint32_t cycle = 0U;
   while (cycle < t_cycles) {
-    for ()
-    if (breakpoint_en && !breakpoint_reset && gb_sm83.reg_file.pc == breakpoint_addr) {
-      printf("breakpoint hit\n");
-      gb_state = GB_STATE_PAUSE;
-      breakpoint_reset = true;
+    breakpoint_t* bp = breakpoints;
+    bool skip = false;
+    while (bp != NULL) {
+      if (gb_sm83.reg_file.pc == bp->addr) {
+        if (bp->trigger) {
+          printf("breakpoint 0x%04x hit\n", bp->addr);
+          gb_state = GB_STATE_PAUSE;
+          skip = true;
+        }
+        bp->trigger = !bp->trigger;
+        break;
+      }
+      bp = bp->next;
+    }
+    if (skip) {
       break;
     }
-    breakpoint_reset = false;
     uint32_t m_cycles = sm83_run(&gb_sm83);
     uint32_t new_t_cycles = (4 * m_cycles);
     gpu_run(new_t_cycles);
@@ -370,9 +383,49 @@ void gb_dump_sm83(void) {
 
 void gb_breakpoint(bool en, uint16_t addr) {
   breakpoint_t* bp = breakpoints;
-  breakpoint_en = en;
-  breakpoint_addr = addr;
-  breakpoint_reset = false;
+  if (en) {
+    if (bp != NULL) {
+      while (bp->next != NULL) {
+        bp = bp->next;
+      }
+      bp->next = (breakpoint_t*)malloc(sizeof(breakpoint_t));
+      if (bp->next != NULL) {
+        bp = bp->next;
+        bp->addr = addr;
+        bp->trigger = true;
+        bp->next = NULL;
+      }
+    } else {
+      breakpoints = (breakpoint_t*)malloc(sizeof(breakpoint_t));
+      if (breakpoints != NULL) {
+        breakpoints->addr = addr;
+        breakpoints->trigger = true;
+        breakpoints->next = NULL;
+      }
+    }
+  } else {
+    breakpoint_t* bp_last = bp;
+    while (bp != NULL) {
+      if (bp->addr == addr) {
+        breakpoint_t* bp_next = bp->next;
+        free(bp);
+        if (bp == breakpoints) {
+          breakpoints = bp_next;
+        } else {
+          bp_last->next = bp_next;
+        }
+        break;
+      }
+      bp_last = bp;
+      bp = bp->next;
+    }
+  }
+  printf("Breakpoints:\n");
+  bp = breakpoints;
+  while (bp != NULL) {
+    printf("0x%04x\n", bp->addr);
+    bp = bp->next;
+  }
 }
 
 void gb_reset_sm83_dmg(sm83_t* sm83, uint8_t checksum) {
