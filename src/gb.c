@@ -43,6 +43,7 @@ typedef enum debug_command_s {
   DEBUG_COMMAND_RUN,
   DEBUG_COMMAND_EXIT,
   DEBUG_COMMAND_BREAK,
+  DEBUG_COMMAND_INSTR,
   NUM_DEBUG_COMMANDS
 } debug_command_t;
 
@@ -78,6 +79,7 @@ static input_map_t keyboard_map = {
 static SDL_AppResult app_result = SDL_APP_CONTINUE;
 static breakpoint_t* breakpoints;
 static uint64_t gb_cycle_count = 0U;
+static bool gb_dump_instr = false;
 
 static void gb_draw(uint8_t x, uint8_t y, uint16_t color);
 static bool init_renderer(void);
@@ -90,6 +92,7 @@ static void gb_debug_dump_memory(uint16_t addr, uint32_t num_bytes);
 static void gb_debug_run(uint32_t num_clocks);
 static void gb_dump_sm83(void);
 static void gb_breakpoint(bool en, uint16_t addr);
+static void gb_en_dump_instr(bool en);
 
 static void gb_reset_sm83_dmg(sm83_t* sm83, uint8_t checksum);
 static void gb_reset_sm83_cgb(sm83_t* sm83);
@@ -275,6 +278,8 @@ void gb_handle_debug_commands(void) {
         debug_command = DEBUG_COMMAND_EXIT;
       } else if (strncmp(token, "break", 5U) == 0) {
         debug_command = DEBUG_COMMAND_BREAK;
+      } else if (strncmp(token, "instr", 5U) == 0) {
+        debug_command = DEBUG_COMMAND_INSTR;
       }
     } else {
       args[arg_idx - 1] = strtoul(token, NULL, 10);
@@ -297,6 +302,9 @@ void gb_handle_debug_commands(void) {
       break;
     case DEBUG_COMMAND_BREAK:
       gb_breakpoint(args[0], args[1]);
+      break;
+    case DEBUG_COMMAND_INSTR:
+      gb_en_dump_instr(args[0]);
       break;
     default:
       break;
@@ -332,6 +340,9 @@ void gb_run(uint32_t t_cycles) {
     }
     if (skip) {
       break;
+    }
+    if (gb_dump_instr) {
+      printf("0x%04x: %02x\n", gb_sm83.reg_file.pc, mem_load(gb_sm83.reg_file.pc));
     }
     uint32_t m_cycles = sm83_run(&gb_sm83);
     uint32_t new_t_cycles = (4 * m_cycles);
@@ -466,4 +477,8 @@ void gb_reset_sm83_cgb(sm83_t* sm83) {
 
   sm83->state = SM83_STATE_RUN;
   sm83->ime = false;
+}
+
+void gb_en_dump_instr(bool en) {
+  gb_dump_instr = en;
 }
