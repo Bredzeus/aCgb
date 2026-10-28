@@ -20,7 +20,7 @@ void sm83_alu_execute(sm83_alu_op_t op, sm83_alu_t* operands) {
     case SM83_ALU_OP_SUB: {
       const uint8_t twos_comp = (~operands->secondary) + 1U;
       carry = (operands->primary & twos_comp);
-      operands->primary += twos_comp;
+      operands->primary -= operands->secondary;
       break;
     }
     case SM83_ALU_OP_SBC: {
@@ -28,7 +28,7 @@ void sm83_alu_execute(sm83_alu_op_t op, sm83_alu_t* operands) {
       const uint8_t c_val = ((operands->flags & FLAG_CARRY) ? 1U : 0U);
       carry = (operands->primary & twos_comp & c_val);
       // This might be wrong
-      operands->primary += twos_comp;
+      operands->primary -= operands->secondary;
       operands->primary += c_val;
       break;
     }
@@ -39,7 +39,7 @@ void sm83_alu_execute(sm83_alu_op_t op, sm83_alu_t* operands) {
     }
     case SM83_ALU_OP_DEC: {
       carry = (operands->primary & 255U);
-      operands->primary += 255U;
+      operands->primary--;
       break;
     }
     case SM83_ALU_OP_AND: {

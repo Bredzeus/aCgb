@@ -11,7 +11,8 @@
 // Masks for load instruction
 #define SM83_LD_MASK (0b11000000U)
 #define SM83_LD_PREFIX (0b01000000U)
-#define SM83_LD_IMM_PREFIX (0b00000000U)
+#define SM83_LD_IMM_MASK (0b11000111U)
+#define SM83_LD_IMM_PREFIX (0b00000110U)
 
 // Masks for add instruction
 #define SM83_ARITH_MASK (0b11111000U)
@@ -951,11 +952,12 @@ void handle_run(sm83_t* sm83) {
   default: {
     // Handle general cases
     const uint8_t ld_masked_instr = instr & SM83_LD_MASK;
+    const uint8_t ld_imm_masked_instr = instr & SM83_LD_IMM_MASK;
     const uint8_t arith_masked_instr = instr & SM83_ARITH_MASK;
     const uint8_t inc_dec_masked_instr = instr & SM83_INC_DEC_MASK;
     if (ld_masked_instr == SM83_LD_PREFIX) { // Load register
       load_reg_std(sm83, instr);
-    } else if (ld_masked_instr == SM83_LD_IMM_PREFIX) { // Load immediate 
+    } else if (ld_imm_masked_instr == SM83_LD_IMM_PREFIX) { // Load immediate 
       load_reg_imm(sm83, instr);
     } else if (arith_masked_instr == SM83_ADD_PREFIX) { // add register
       const uint8_t val = reg_lookup_val(sm83, instr & SM83_END_INDEX_MASK);
