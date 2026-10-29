@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 #include "common.h"
+#include "sstr.h"
 
 typedef enum {
   MBC_TYPE_NONE,
@@ -86,6 +87,7 @@ typedef union mbc_s {
 void mbc_init(mbc_type_t type, rom_load_f_t rom_load, rom_store_f_t ram_store, rom_load_f_t ram_load);
 uint8_t mbc_load(uint16_t addr);
 void mbc_store(uint16_t addr, uint8_t val);
+void mbc_to_sstr(sstr_t* sstr);
 // Todo: add mbc_update to handle mbcs with special functions, i.e. rtc
 
 #endif

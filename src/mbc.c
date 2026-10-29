@@ -1,5 +1,6 @@
 #include "mbc.h"
 #include <string.h>
+#include <stdio.h>
 #include "mem_map.h"
 #include "common.h"
 
@@ -258,7 +259,7 @@ uint8_t mbc_load_mbc2(uint16_t addr) {
     if (rom_bank == 0) {
       rom_bank = 1;
     }
-    rom_addr = (addr & 0x3FU) | (rom_bank << 14);
+    rom_addr = (addr & 0x3FFFU) | (rom_bank << 14);
     val = rom_load_cb(rom_addr);
   } else if (RANGE_INC(addr, ADDR_EXRAM_START, ADDR_EXRAM_END) && mbc.mbc2.ram_en) {
     // mbc2 has 512 (half-bytes) of ram that are mirrored through external ram space
@@ -305,7 +306,7 @@ uint8_t mbc_load_mbc3(uint16_t addr) {
     if (rom_bank == 0) {
       rom_bank = 1;
     }
-    rom_addr = (addr & 0x3FU) | (rom_bank << 14);
+    rom_addr = (addr & 0x3FFFU) | (rom_bank << 14);
     val = rom_load_cb(rom_addr);
   } else if (RANGE_INC(addr, ADDR_EXRAM_START, ADDR_EXRAM_END) && mbc.mbc3.ram_timer_en){
     if (mbc.mbc3.ram_bank < 0x8U) {
@@ -517,4 +518,28 @@ uint8_t mbc_load_other(uint16_t addr) {
 void mbc_store_other(uint16_t addr, uint8_t val) {
   (void)addr;
   (void)val;
+}
+
+void mbc_to_sstr(sstr_t* sstr) {
+  bool ok = true;
+  switch (mbc_type) {
+    case MBC_TYPE_MBC3:
+      const char mbc3_str[] = "rom bank: %u\nram bank: %u\n";
+      if (sstr->size < sizeof(mbc3_str)) {
+        ok &= sstr_resize(sstr, sizeof(mbc3_str));
+      }
+      if (ok) {
+        sstr->len = snprintf(sstr->data, sstr->size, mbc3_str, mbc.mbc3.rom_bank, mbc.mbc3.ram_bank);
+      }
+      break;
+    default:
+      const char default_str[] = "not implemented\n";
+      if (sstr->size < sizeof(default_str)) {
+        ok &= sstr_resize(sstr, sizeof(default_str));
+      }
+      if (ok) {
+        sstr->len = snprintf(sstr->data, sstr->size, default_str);
+      }
+      break;
+  }
 }

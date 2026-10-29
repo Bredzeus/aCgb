@@ -10,6 +10,7 @@
 #include "gpu.h"
 #include "input.h"
 #include "timer.h"
+#include "mbc.h"
 
 #define SDL_MAIN_USE_CALLBACKS 1
 #include <SDL3/SDL.h>
@@ -44,6 +45,7 @@ typedef enum debug_command_s {
   DEBUG_COMMAND_EXIT,
   DEBUG_COMMAND_BREAK,
   DEBUG_COMMAND_INSTR,
+  DEBUG_COMMAND_MBC,
   NUM_DEBUG_COMMANDS
 } debug_command_t;
 
@@ -91,6 +93,7 @@ static void gb_run(uint32_t t_cycles);
 static void gb_debug_dump_memory(uint16_t addr, uint32_t num_bytes);
 static void gb_debug_run(uint32_t num_clocks);
 static void gb_dump_sm83(void);
+static void gb_dump_mbc(void);
 static void gb_breakpoint(bool en, uint16_t addr);
 static void gb_en_dump_instr(bool en);
 
@@ -280,9 +283,15 @@ void gb_handle_debug_commands(void) {
         debug_command = DEBUG_COMMAND_BREAK;
       } else if (strncmp(token, "instr", 5U) == 0) {
         debug_command = DEBUG_COMMAND_INSTR;
+      } else if (strncmp(token, "mbc", 3U) == 0) {
+        debug_command = DEBUG_COMMAND_MBC;
       }
     } else {
-      args[arg_idx - 1] = strtoul(token, NULL, 10);
+      if (*token == '$') {
+        args[arg_idx - 1] = strtoul(token + 1, NULL, 16);
+      } else {
+        args[arg_idx - 1] = strtoul(token, NULL, 10);
+      }
     }
     arg_idx++;
     token = strtok(NULL, " ");
@@ -305,6 +314,9 @@ void gb_handle_debug_commands(void) {
       break;
     case DEBUG_COMMAND_INSTR:
       gb_en_dump_instr(args[0]);
+      break;
+    case DEBUG_COMMAND_MBC:
+      gb_dump_mbc();
       break;
     default:
       break;
@@ -390,6 +402,16 @@ void gb_dump_sm83(void) {
     sstr_print(&sm83_dump);
   }
   sstr_deinit(&sm83_dump);
+}
+
+void gb_dump_mbc(void) {
+  sstr_t mbc_dump;
+  bool ok = sstr_init(&mbc_dump);
+  if (ok) {
+    mbc_to_sstr(&mbc_dump);
+    sstr_print(&mbc_dump);
+  }
+  sstr_deinit(&mbc_dump);
 }
 
 void gb_breakpoint(bool en, uint16_t addr) {
