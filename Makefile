@@ -8,6 +8,7 @@ BUILD_DIR=$(PROJ_DIR)/build
 C_FLAGS=-std=c11
 C_FLAGS+=-Werror
 C_FLAGS+=-Wall
+C_FLAGS+=-g
 
 # Project #defines
 ACGB_DEFINES="-DACGB_NAME=\"aCgb\""

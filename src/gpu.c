@@ -9,7 +9,7 @@
 
 #define GPU_DOT_VBLANK_Y (143U)
 #define GPU_DOT_DRAW_X_START (80U)
-#define GPU_DOT_HBLANK_START (252U)
+#define GPU_DOT_HBLANK_START (240U)
 
 // LCD Control bits
 #define GPU_LCDC_BG_WIN_EN_PRIO (0U)
@@ -83,14 +83,14 @@ const uint16_t gpu_dmg_color_values[NUM_GPU_COLOR_INDEX] = {
 };
 
 // Local variables
-static uint8_t gpu_lcd_control = 0; // 0xFF40
-static uint8_t gpu_lcd_status = 0; // 0xFF41
+static uint8_t gpu_lcd_control = 0x91; // 0xFF40
+static uint8_t gpu_lcd_status = 0x85; // 0xFF41
 static uint8_t gpu_view_y = 0; // 0xFF42
 static uint8_t gpu_view_x = 0; // 0xFF43
 static uint8_t gpu_lcd_y = 0; // 0xFF44
 static uint8_t gpu_lcd_y_compare = 0; // 0xFF45
-static uint8_t gpu_oam_dma = 0; // 0xFF46
-static uint8_t gpu_dmg_bg_palette = 0; // 0xFF47
+static uint8_t gpu_oam_dma = 0xff; // 0xFF46
+static uint8_t gpu_dmg_bg_palette = 0xfc; // 0xFF47
 static uint8_t gpu_dmg_obj_palette_0 = 0; // 0xFF48
 static uint8_t gpu_dmg_obj_palette_1 = 0; // 0xFF49
 static uint8_t gpu_window_y = 0; // 0xFF4A
@@ -115,6 +115,7 @@ static uint16_t gpu_curr_stall = 0;
 static uint8_t gpu_fetcher_px_x = 0;
 static uint8_t gpu_fetcher_px_y = 0;
 static bool gpu_window_y_cond = false;
+static uint16_t gpu_dot_x = 0;
 
 static uint16_t (*gpu_get_color)(gpu_pixel_t*, gpu_pixel_t*);
 static draw_f_t gpu_draw = NULL;
@@ -198,6 +199,7 @@ void gpu_run(uint8_t clocks) {
             gpu_fetch_obj_pixels();
           }
           gpu_render();
+          gpu_px_x++;
         }
         break;
       case GPU_MODE_HBLANK:
@@ -207,6 +209,7 @@ void gpu_run(uint8_t clocks) {
     }
 
     // y compare check
+    gpu_dot_x++;
     if (gpu_lcd_y == gpu_lcd_y_compare) {
       SET_BIT(gpu_lcd_status, GPU_LCDS_LYC);
     } else {
@@ -214,9 +217,8 @@ void gpu_run(uint8_t clocks) {
     }
 
     // update current dot position
-    gpu_px_x++;
-    if (gpu_px_x > GPU_DOT_WIDTH) {
-      gpu_px_x = 0;
+    if (gpu_dot_x > GPU_DOT_WIDTH) {
+      gpu_dot_x = 0;
       gpu_lcd_y++;
     }
     if (gpu_lcd_y > GPU_DOT_HEIGHT) {
@@ -227,9 +229,9 @@ void gpu_run(uint8_t clocks) {
     gpu_mode_t next_mode;
     if (gpu_lcd_y > GPU_DOT_VBLANK_Y) {
       next_mode = GPU_MODE_VBLANK;
-    } else if (gpu_px_x <= GPU_DOT_DRAW_X_START) {
+    } else if (gpu_dot_x < GPU_DOT_DRAW_X_START) {
       next_mode = GPU_MODE_OAM;
-    } else if (gpu_px_x <= (GPU_DOT_HBLANK_START + gpu_total_stall)) {
+    } else if (gpu_dot_x < (GPU_DOT_HBLANK_START + gpu_total_stall)) {
       next_mode = GPU_MODE_DRAW;
     } else {
       next_mode = GPU_MODE_HBLANK;
@@ -499,6 +501,11 @@ void gpu_transition_mode(gpu_mode_t mode) {
       memset(gpu_oam_scanline, GPU_OAM_SCANLINE_NONE, GPU_SCREEN_WIDTH);
       gpu_num_oam_available = GPU_NUM_OBJ_PER_SCANLINE;
       break;
+    case GPU_MODE_DRAW:
+      gpu_curr_stall = 12;
+      gpu_total_stall = 0;
+      gpu_px_x = 0;
+      break;
     default:
       break;
   }
@@ -507,14 +514,14 @@ void gpu_transition_mode(gpu_mode_t mode) {
 void gpu_scan_oam(void) {
   // handle one obj per 2 clocks since oam scan is 80
   // while there are 40 objs to scan
-  if (gpu_px_x % 2 != 0) {
+  if (gpu_dot_x % 2 != 0) {
     return;
   }
   // check if already at max 10 objs 
   if (gpu_num_oam_available == 0) {
     return;
   }
-  uint8_t obj_idx = gpu_px_x / 2;
+  uint8_t obj_idx = gpu_dot_x / 2;
   uint16_t obj_addr = ADDR_OAM_START + (obj_idx * GPU_BYTES_PER_OBJ);
   uint8_t obj_y = gpu_io.load(obj_addr);
   uint8_t obj_x = gpu_io.load(obj_addr + 1);

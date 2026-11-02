@@ -12,10 +12,10 @@ typedef enum timer_clock_sel_s {
   NUM_TIMER_CLOCK_SEL
 } timer_clock_sel_t;
 
-static uint8_t timer_divider = 0; // 0xFF04
+static uint8_t timer_divider = 0xab; // 0xFF04
 static uint8_t timer_counter = 0; // 0xFF05
 static uint8_t timer_modulo = 0; // 0xFF06
-static uint8_t timer_control = 0; // 0xFF07
+static uint8_t timer_control = 0xf8; // 0xFF07
 
 static mem_interface_t timer_mem_io = {0};
 static uint16_t timer_num_clock = 0;

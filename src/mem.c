@@ -10,7 +10,7 @@ static uint8_t lram[LRAM_SIZE];
 static uint8_t hram[HRAM_SIZE];
 static uint8_t oam[OAM_SIZE];
 static uint8_t interrupt_enable = 0; // 0xFFFF
-static uint8_t interrupt_flags = 0; // 0xFF0F
+static uint8_t interrupt_flags = 0xe1; // 0xFF0F
 
 static uint8_t mem_dma_control_reg = 0; // 0xFF46
 static uint8_t mem_dma_remaining_bytes = 0;

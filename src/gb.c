@@ -124,6 +124,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 
   input_enable_device(INPUT_DEVICE_KEYBOARD, true);
   timer_init(&mem_io);
+  input_init(&mem_io);
 
   bool rom_arg = false;
   gb_state = GB_STATE_RUN;
@@ -216,6 +217,7 @@ bool init_renderer(void) {
     printf("Failed to create screen texture\n");
     return false;
   }
+  SDL_SetTextureScaleMode(screen, SDL_SCALEMODE_NEAREST);
 
   scr_surface = SDL_CreateSurface(GPU_SCREEN_WIDTH, GPU_SCREEN_HEIGHT, SDL_PIXELFORMAT_ABGR1555);
   if (scr_surface == NULL) {
@@ -262,7 +264,7 @@ void gb_read_keyboard(input_state_t* keyboard_state) {
 void gb_handle_debug_commands(void) {
   #define DEBUG_INPUT_SIZE (100U)
   char input_buffer[DEBUG_INPUT_SIZE];
-  printf("Instruction count: %lu\n", gb_cycle_count);
+  printf("t-cycle count: %lu\n", gb_cycle_count);
   printf("Enter command: ");
   fgets(input_buffer, sizeof(input_buffer), stdin);
   debug_command_t debug_command = NUM_DEBUG_COMMANDS;
@@ -327,7 +329,7 @@ void gb_run(uint32_t t_cycles) {
   if(!SDL_LockTextureToSurface(screen, NULL, &scr_surface)) {
     printf("Failed to lock screen texture\n");
   }
-  input_state_t keyboard;
+  input_state_t keyboard = {0};
   gb_read_keyboard(&keyboard);
   input_set_device_state(INPUT_DEVICE_KEYBOARD, &keyboard);
   if (keyboard.pause) {

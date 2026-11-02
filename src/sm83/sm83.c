@@ -98,13 +98,14 @@ uint32_t sm83_run(sm83_t* sm83) {
 }
 
 void sm83_to_sstr(sm83_t* sm83, sstr_t* str) {
-  const char print_str[] = "SM83 register file:\npc: 0x%04x\nsp: 0x%04x\na:  0x%02x\nf:  0x%02x\nb:  0x%02x\nc:  0x%02x\nd:  0x%02x\ne:  0x%02x\nh:  0x%02x\nl:  0x%02x\nir: 0x%02x\nie: 0x%02x\n";
+  const char print_str[] = "SM83 register file:\nState: %u\npc: 0x%04x\nsp: 0x%04x\na:  0x%02x\nf:  0x%02x\nb:  0x%02x\nc:  0x%02x\nd:  0x%02x\ne:  0x%02x\nh:  0x%02x\nl:  0x%02x\nir: 0x%02x\nie: 0x%02x\n";
   bool ok = true;
   if (str->size < sizeof(print_str)) {
     ok &= sstr_resize(str, sizeof(print_str));
   }
   if (ok) {
     str->len = snprintf(str->data, str->size, print_str, 
+      (unsigned int)sm83->state,
       sm83->reg_file.pc,
       sm83->reg_file.sp,
       sm83->reg_file.a,
@@ -122,6 +123,7 @@ void sm83_to_sstr(sm83_t* sm83, sstr_t* str) {
 }
 
 void handle_halt(sm83_t* sm83) {
+  sm83->cycles = 1;
   if(handle_interrupt(sm83) != SM83_INT_RES_NOP){
     sm83->state = SM83_STATE_RUN;
   }
@@ -129,6 +131,7 @@ void handle_halt(sm83_t* sm83) {
 
 void handle_stop(sm83_t* sm83) {
   // exits stop on controller input
+  sm83->cycles = 1;
   uint8_t joypad = sm83->io.load(ADDR_IO_JOYPAD);
   if((joypad & 0x0F) != 0x0F){
     sm83->state = SM83_STATE_RUN;
